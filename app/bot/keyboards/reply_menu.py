@@ -6,6 +6,7 @@ ORDERS = "📦 سفارش‌های من"
 DISCOUNTS = "🎁 تخفیف‌ها"
 ACCOUNT = "👤 حساب کاربری"
 SUPPORT = "🎧 پشتیبانی"
+REFERRAL = "🤝 دعوت از دوستان"
 CHANNEL = "📢 کانال ما"
 HOME = "🏠 منوی اصلی"
 
@@ -17,7 +18,7 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=SHOP), KeyboardButton(text=WALLET)],
             [KeyboardButton(text=ORDERS), KeyboardButton(text=DISCOUNTS)],
             [KeyboardButton(text=ACCOUNT), KeyboardButton(text=SUPPORT)],
-            [KeyboardButton(text=CHANNEL)],
+            [KeyboardButton(text=REFERRAL), KeyboardButton(text=CHANNEL)],
         ],
         resize_keyboard=True,
     )

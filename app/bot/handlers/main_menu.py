@@ -1,7 +1,7 @@
 from aiogram import F, Router
 from aiogram.types import Message
 
-from app.bot.handlers.account import build_account_view
+from app.bot.handlers.account import build_account_view, build_referral_view
 from app.bot.handlers.shop import build_categories_view
 from app.bot.keyboards.reply_menu import (
     ACCOUNT,
@@ -9,6 +9,7 @@ from app.bot.keyboards.reply_menu import (
     DISCOUNTS,
     HOME,
     ORDERS,
+    REFERRAL,
     SHOP,
     SUPPORT,
     WALLET,
@@ -45,14 +46,28 @@ async def handle_shop_entry(message: Message) -> None:
 async def handle_account_entry(message: Message) -> None:
     await _switch_to_home_keyboard(message)
     async with get_session() as session:
-        text, keyboard = await build_account_view(
+        text = await build_account_view(
             session,
             message.from_user.id,
             message.from_user.username,
             message.from_user.first_name,
             message.from_user.last_name,
         )
-    await message.answer(text, reply_markup=keyboard)
+    await message.answer(text)
+
+
+@router.message(F.text == REFERRAL)
+async def handle_referral_entry(message: Message) -> None:
+    await _switch_to_home_keyboard(message)
+    async with get_session() as session:
+        text = await build_referral_view(
+            session,
+            message.from_user.id,
+            message.from_user.username,
+            message.from_user.first_name,
+            message.from_user.last_name,
+        )
+    await message.answer(text)
 
 
 @router.message(F.text == WALLET)
