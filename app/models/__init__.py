@@ -5,3 +5,6 @@
 from app.models.user import User  # noqa: F401
 from app.models.wallet import Wallet, WalletTransaction  # noqa: F401
 from app.models.setting import Setting, TextTemplate  # noqa: F401
+from app.models.required_channel import RequiredChannel  # noqa: F401
+from app.models.category import Category  # noqa: F401
+from app.models.product import Product  # noqa: F401
