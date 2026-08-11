@@ -1,9 +1,12 @@
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 
 from app.bot.handlers import start as start_handler
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
@@ -44,12 +47,48 @@ async def run_polling() -> None:
     await dp.start_polling(bot)
 
 
+async def health_check(_: web.Request) -> web.Response:
+    """Render/هر پلتفرمی برای بررسی زنده‌بودن سرویس به این مسیر درخواست می‌زند."""
+    return web.Response(text="Access Hub bot is running.")
+
+
 async def run_webhook() -> None:
     """
-    ساختار پایه برای Webhook - در فاز Deployment کامل می‌شود
-    (aiohttp web app + SimpleRequestHandler).
+    اجرای ربات به‌صورت Web Service (مناسب برای پلن رایگان Render که
+    Background Worker رایگان ندارد). Render آدرس عمومی سرویس را خودکار
+    در متغیر محیطی RENDER_EXTERNAL_URL قرار می‌دهد، پس نیازی به تنظیم
+    دستی WEBHOOK_BASE_URL روی Render نیست (فقط برای دیپلوی‌های دیگر لازم است).
     """
-    raise NotImplementedError("Webhook mode در فاز Deployment پیاده‌سازی می‌شود.")
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    dp = create_dispatcher()
+
+    base_url = settings.webhook_base_url or os.environ.get("RENDER_EXTERNAL_URL")
+    if not base_url:
+        raise RuntimeError(
+            "آدرس عمومی سرویس پیدا نشد. WEBHOOK_BASE_URL را در Environment Variables تنظیم کن."
+        )
+    webhook_url = base_url.rstrip("/") + settings.webhook_path
+
+    logger.info(f"Access Hub bot starting in WEBHOOK mode -> {webhook_url}")
+    await bot.set_webhook(webhook_url, drop_pending_updates=True)
+
+    app = web.Application()
+    app.router.add_get("/", health_check)
+
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.webhook_path)
+    setup_application(app, dp, bot=bot)
+
+    port = int(os.environ.get("PORT", settings.webapp_port))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, settings.webapp_host, port)
+    await site.start()
+
+    logger.info(f"Web service listening on {settings.webapp_host}:{port}")
+    await asyncio.Event().wait()  # برای همیشه زنده بماند
 
 
 def main() -> None:
