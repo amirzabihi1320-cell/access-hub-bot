@@ -1,0 +1,38 @@
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database.base import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
+
+    username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    language: Mapped[str] = mapped_column(String(8), default="fa")
+
+    total_purchases: Mapped[int] = mapped_column(Integer, default=0)
+    total_spent: Mapped[int] = mapped_column(BigInteger, default=0)  # تومان (ریال در آینده قابل تغییر)
+
+    referral_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    referred_by: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # FK به users.id در فاز Referral کامل می‌شود
+
+    vip_level: Mapped[str] = mapped_column(String(32), default="NONE")
+
+    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    wallet: Mapped["Wallet"] = relationship(back_populates="user", uselist=False)

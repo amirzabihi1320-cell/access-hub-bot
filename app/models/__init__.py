@@ -1,0 +1,7 @@
+"""
+تمام مدل‌ها اینجا import می‌شوند تا Alembic هنگام autogenerate
+همه‌ی جدول‌ها را ببیند. هر مدل جدید در فازهای بعد اینجا اضافه شود.
+"""
+from app.models.user import User  # noqa: F401
+from app.models.wallet import Wallet, WalletTransaction  # noqa: F401
+from app.models.setting import Setting, TextTemplate  # noqa: F401
