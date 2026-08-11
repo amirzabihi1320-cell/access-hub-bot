@@ -15,6 +15,7 @@ from app.bot.handlers import start as start_handler
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
 from app.bot.middlewares.membership import MembershipMiddleware
 from app.config.settings import get_settings
+from app.database.seed import seed_initial_data
 
 settings = get_settings()
 
@@ -99,6 +100,8 @@ async def run_webhook() -> None:
 
 
 def main() -> None:
+    asyncio.run(seed_initial_data())
+
     if settings.run_mode == "webhook":
         asyncio.run(run_webhook())
     else:
