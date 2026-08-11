@@ -8,3 +8,4 @@ from app.models.setting import Setting, TextTemplate  # noqa: F401
 from app.models.required_channel import RequiredChannel  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.product import Product  # noqa: F401
+from app.models.deposit_request import DepositRequest  # noqa: F401

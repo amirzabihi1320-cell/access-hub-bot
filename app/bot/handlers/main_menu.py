@@ -3,6 +3,7 @@ from aiogram.types import Message
 
 from app.bot.handlers.account import build_account_view, build_referral_view
 from app.bot.handlers.shop import build_categories_view
+from app.bot.handlers.wallet import build_wallet_view
 from app.bot.keyboards.reply_menu import (
     ACCOUNT,
     CHANNEL,
@@ -73,7 +74,9 @@ async def handle_referral_entry(message: Message) -> None:
 @router.message(F.text == WALLET)
 async def handle_wallet_entry(message: Message) -> None:
     await _switch_to_home_keyboard(message)
-    await message.answer("💰 کیف پول در فاز بعدی فعال می‌شود.")
+    async with get_session() as session:
+        text, keyboard = await build_wallet_view(session, message.from_user)
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.message(F.text == ORDERS)

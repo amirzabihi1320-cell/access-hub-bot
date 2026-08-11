@@ -2,23 +2,21 @@
 
 ربات فروشگاهی ماژولار برای فروش محصولات دیجیتال داخل تلگرام.
 
-## وضعیت فعلی (فاز ۰ - Bootstrap)
+## وضعیت فعلی (تا پایان فاز ۳)
 
-در این فاز پیاده‌سازی شده:
+تا اینجا پیاده‌سازی شده:
 
 - ✅ ساختار پروژه (Handlers / Services / Repositories / Models جدا از هم)
-- ✅ Config با Pydantic Settings (خواندن از `.env`)
-- ✅ اتصال Async به PostgreSQL با SQLAlchemy 2.x
-- ✅ مدل‌های پایه: `User`, `Wallet`, `WalletTransaction`, `Setting`, `TextTemplate`
-- ✅ Generic Settings System (تنظیمات از دیتابیس، نه Hard-code)
-- ✅ دستور `/start` + منوی اصلی (Inline Keyboard)
-- ✅ Middleware حالت تعمیر (Maintenance Mode)
-- ✅ Alembic برای Migration
-- ✅ Dockerfile + docker-compose (برای اجرای لوکال/VPS)
-- ✅ یک تست نمونه با SQLite in-memory
+- ✅ Config با Pydantic Settings + Generic Settings System از دیتابیس
+- ✅ اتصال Async به PostgreSQL با SQLAlchemy 2.x + Alembic
+- ✅ `/start` + منوی اصلی + Membership Check + حساب کاربری/Referral (فاز ۱)
+- ✅ دسته‌بندی‌ها + محصولات Fixed/Variable Quantity + Pricing Engine (فاز ۲)
+- ✅ **کیف پول کامل + Wallet Ledger + شارژ دستی + تأیید/رد ادمین (فاز ۳)**
+- ✅ Dockerfile + docker-compose، تست‌های SQLite in-memory
 
-هنوز پیاده نشده: فروشگاه/محصولات، کیف‌پول واقعی (فقط مدل ساخته شده)،
-پنل ادمین، سفارش‌ها و... — این‌ها در فازهای بعدی می‌آیند.
+هنوز پیاده نشده: سفارش‌ها/پرداخت با کیف پول/تحویل محصول (فاز ۴)، پنل
+ادمین کامل (فاز ۵)، کوپن/رفرال reward/VIP (فاز ۶)، تیکت/Broadcast/Audit
+Log (فاز ۷)، Telegram Stars (فاز ۸).
 
 ---
 
@@ -121,9 +119,9 @@ Handler فقط پیام تلگرام را می‌گیرد → Service را صد�
 
 | فاز | محتوا |
 |---|---|
-| ۱ | Membership Check کامل + User Account Page |
-| ۲ | Categories + Products (Fixed & Variable Quantity) + Pricing Engine |
-| ۳ | Wallet Service کامل + Ledger + Manual Deposit + تأیید/رد ادمین |
+| ~~۱~~ | ~~Membership Check کامل + User Account Page~~ ✅ |
+| ~~۲~~ | ~~Categories + Products (Fixed & Variable Quantity) + Pricing Engine~~ ✅ |
+| ~~۳~~ | ~~Wallet Service کامل + Ledger + Manual Deposit + تأیید/رد ادمین~~ ✅ |
 | ۴ | Order Service + Wallet Payment + Delivery Engine (Manual/Code) |
 | ۵ | Admin Panel کامل (`/admin`) با Role-based Permission |
 | ۶ | Coupon + Referral + VIP |
