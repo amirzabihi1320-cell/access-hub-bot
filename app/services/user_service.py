@@ -1,7 +1,7 @@
 import secrets
 import string
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -54,3 +54,9 @@ class UserService:
 
         await self.session.commit()
         return user
+
+    async def count_referrals(self, user_id: int) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(User).where(User.referred_by == user_id)
+        )
+        return result.scalar_one()

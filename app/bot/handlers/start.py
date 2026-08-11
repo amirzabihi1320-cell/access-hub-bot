@@ -1,8 +1,8 @@
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
-from app.bot.keyboards.main_menu import main_menu_keyboard
+from app.bot.keyboards.reply_menu import main_reply_keyboard
 from app.database.base import get_session
 from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
@@ -29,4 +29,4 @@ async def handle_start(message: Message) -> None:
         "خوش آمدید به Access Hub.\n"
         "دسترسی آسان به سرویس‌ها و محصولات دیجیتال."
     )
-    await message.answer(text, reply_markup=main_menu_keyboard())
+    await message.answer(text, reply_markup=main_reply_keyboard())

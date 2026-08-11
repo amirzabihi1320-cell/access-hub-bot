@@ -9,6 +9,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 from app.bot.handlers import account as account_handler
+from app.bot.handlers import main_menu as main_menu_handler
 from app.bot.handlers import membership as membership_handler
 from app.bot.handlers import shop as shop_handler
 from app.bot.handlers import start as start_handler
@@ -34,6 +35,7 @@ def create_dispatcher() -> Dispatcher:
 
     dp.include_router(start_handler.router)
     dp.include_router(membership_handler.router)
+    dp.include_router(main_menu_handler.router)
     dp.include_router(shop_handler.router)
     dp.include_router(account_handler.router)
     # روترهای فازهای بعد اینجا include می‌شوند:

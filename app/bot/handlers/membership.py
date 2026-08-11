@@ -1,7 +1,7 @@
 from aiogram import Router
 from aiogram.types import CallbackQuery
 
-from app.bot.keyboards.main_menu import main_menu_keyboard
+from app.bot.keyboards.reply_menu import main_reply_keyboard
 from app.database.base import get_session
 from app.services.membership_service import MembershipService
 
@@ -16,9 +16,7 @@ async def handle_membership_check(callback: CallbackQuery) -> None:
         is_member = await membership_service.is_user_member_of_all(callback.bot, callback.from_user.id)
 
     if is_member or not channels:
-        await callback.message.edit_text(
-            "✅ عضویت شما تأیید شد. خوش آمدید!",
-        )
-        await callback.message.answer("🌐 منوی اصلی:", reply_markup=main_menu_keyboard())
+        await callback.message.edit_text("✅ عضویت شما تأیید شد. خوش آمدید!")
+        await callback.message.answer("🌐 منوی اصلی:", reply_markup=main_reply_keyboard())
     else:
         await callback.answer("❌ هنوز عضو همه‌ی کانال‌ها نشده‌اید.", show_alert=True)

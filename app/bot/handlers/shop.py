@@ -1,8 +1,8 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.keyboards.main_menu import main_menu_keyboard
 from app.bot.keyboards.shop import categories_keyboard, product_detail_keyboard, products_keyboard
 from app.bot.states.shop_states import ProductQuantityStates
 from app.database.base import get_session
@@ -13,25 +13,25 @@ from app.services.product_service import ProductService
 router = Router(name="shop")
 
 
-@router.callback_query(F.data == "menu:home")
-async def handle_home(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(
-        "🌐 <b>Access Hub</b>\n\nخوش آمدید به Access Hub.\nدسترسی آسان به سرویس‌ها و محصولات دیجیتال.",
-        reply_markup=main_menu_keyboard(),
-    )
-    await callback.answer()
+async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeyboardMarkup] | None:
+    """خروجی مشترک بین ورودی اولیه (از منوی ثابت) و ناوبری داخلی (دکمه بازگشت)."""
+    categories = await CategoryService(session).list_active()
+    if not categories:
+        return None
+    return "🛍 دسته‌بندی‌ها را انتخاب کنید:", categories_keyboard(categories)
 
 
 @router.callback_query(F.data == "menu:shop")
-async def handle_shop(callback: CallbackQuery) -> None:
+async def handle_shop_back(callback: CallbackQuery) -> None:
     async with get_session() as session:
-        categories = await CategoryService(session).list_active()
+        view = await build_categories_view(session)
 
-    if not categories:
+    if not view:
         await callback.answer("فعلاً محصولی ثبت نشده.", show_alert=True)
         return
 
-    await callback.message.edit_text("🛍 دسته‌بندی‌ها را انتخاب کنید:", reply_markup=categories_keyboard(categories))
+    text, keyboard = view
+    await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
 
 
@@ -121,8 +121,6 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
         f"{product.name} — {result.quantity} عدد\n\n"
         f"قیمت نهایی:\n<b>{result.total_price:,} تومان</b>"
     )
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(

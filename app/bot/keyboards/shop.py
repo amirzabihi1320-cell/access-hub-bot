@@ -11,7 +11,6 @@ def categories_keyboard(categories: list[Category]) -> InlineKeyboardMarkup:
         buttons.append(
             [InlineKeyboardButton(text=f"{icon} {cat.name}", callback_data=f"shop:category:{cat.id}")]
         )
-    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu:home")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
