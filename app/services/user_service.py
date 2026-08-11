@@ -3,6 +3,7 @@ import string
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.wallet import Wallet
@@ -24,7 +25,9 @@ class UserService:
         first_name: str | None,
         last_name: str | None,
     ) -> User:
-        result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
+        result = await self.session.execute(
+            select(User).options(selectinload(User.wallet)).where(User.telegram_id == telegram_id)
+        )
         user = result.scalar_one_or_none()
 
         if user:
@@ -47,7 +50,7 @@ class UserService:
 
         wallet = Wallet(user_id=user.id, balance=0)
         self.session.add(wallet)
+        user.wallet = wallet  # ست کردن دستی رابطه تا بعد از بسته‌شدن session قابل خواندن باشه
 
         await self.session.commit()
-        await self.session.refresh(user)
         return user
