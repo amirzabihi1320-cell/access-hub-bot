@@ -9,14 +9,11 @@ from app.bot.states.shop_states import ProductQuantityStates
 from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.category_service import CategoryService
-from app.services.order_service import (
-    InsufficientBalanceError,
-    OrderService,
-    ProductUnavailableError,
-)
+from app.services.order_service import OrderService, ProductUnavailableError
 from app.services.pricing_service import InvalidQuantityError, calculate_price
 from app.services.product_service import ProductService
 from app.services.user_service import UserService
+from app.services.wallet_service import InsufficientBalanceError
 
 router = Router(name="shop")
 settings = get_settings()

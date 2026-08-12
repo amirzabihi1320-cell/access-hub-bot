@@ -10,11 +10,13 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
 from app.bot.keyboards.membership import membership_keyboard
+from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.membership_service import MembershipService
 from app.services.settings_service import SettingsService
 
 EXEMPT_CALLBACKS = {"membership:check"}
+settings = get_settings()
 
 
 class MembershipMiddleware(BaseMiddleware):
@@ -31,10 +33,16 @@ class MembershipMiddleware(BaseMiddleware):
         if message and message.text and message.text.startswith("/start"):
             return await handler(event, data)
 
+        # ادمین‌ها هرگز نباید توسط عضویت اجباری قفل شوند (بخش ۶: بدون این
+        # استثنا، اگه membership_requirement روی ALL بیفتد حتی خود ادمین هم
+        # به /admin دسترسی پیدا نمی‌کند)
+        user = data.get("event_from_user")
+        if user and user.id in settings.admin_ids:
+            return await handler(event, data)
+
         if callback and callback.data in EXEMPT_CALLBACKS:
             return await handler(event, data)
 
-        user = data.get("event_from_user")
         if not user:
             return await handler(event, data)
 
