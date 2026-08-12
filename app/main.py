@@ -10,6 +10,7 @@ from aiohttp import web
 
 from app.bot.handlers import main_menu as main_menu_handler
 from app.bot.handlers import membership as membership_handler
+from app.bot.handlers import orders as orders_handler
 from app.bot.handlers import shop as shop_handler
 from app.bot.handlers import start as start_handler
 from app.bot.handlers import wallet as wallet_handler
@@ -38,8 +39,8 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(main_menu_handler.router)
     dp.include_router(shop_handler.router)
     dp.include_router(wallet_handler.router)
+    dp.include_router(orders_handler.router)
     # روترهای فازهای بعد اینجا include می‌شوند:
-    # dp.include_router(order_handler.router)
     # dp.include_router(admin_handler.router)
 
     return dp

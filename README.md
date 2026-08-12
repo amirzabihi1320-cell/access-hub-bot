@@ -2,7 +2,7 @@
 
 ربات فروشگاهی ماژولار برای فروش محصولات دیجیتال داخل تلگرام.
 
-## وضعیت فعلی (تا پایان فاز ۳)
+## وضعیت فعلی (تا پایان فاز ۴)
 
 تا اینجا پیاده‌سازی شده:
 
@@ -11,12 +11,12 @@
 - ✅ اتصال Async به PostgreSQL با SQLAlchemy 2.x + Alembic
 - ✅ `/start` + منوی اصلی + Membership Check + حساب کاربری/Referral (فاز ۱)
 - ✅ دسته‌بندی‌ها + محصولات Fixed/Variable Quantity + Pricing Engine (فاز ۲)
-- ✅ **کیف پول کامل + Wallet Ledger + شارژ دستی + تأیید/رد ادمین (فاز ۳)**
+- ✅ کیف پول کامل + Wallet Ledger + شارژ دستی + تأیید/رد ادمین (فاز ۳)
+- ✅ **سفارش‌ها + پرداخت آنی با کیف پول + تحویل دستی توسط ادمین (فاز ۴)**
 - ✅ Dockerfile + docker-compose، تست‌های SQLite in-memory
 
-هنوز پیاده نشده: سفارش‌ها/پرداخت با کیف پول/تحویل محصول (فاز ۴)، پنل
-ادمین کامل (فاز ۵)، کوپن/رفرال reward/VIP (فاز ۶)، تیکت/Broadcast/Audit
-Log (فاز ۷)، Telegram Stars (فاز ۸).
+هنوز پیاده نشده: پنل ادمین کامل (فاز ۵)، کوپن/رفرال reward/VIP (فاز ۶)،
+تیکت/Broadcast/Audit Log (فاز ۷)، Telegram Stars (فاز ۸).
 
 ---
 
@@ -122,7 +122,7 @@ Handler فقط پیام تلگرام را می‌گیرد → Service را صد�
 | ~~۱~~ | ~~Membership Check کامل + User Account Page~~ ✅ |
 | ~~۲~~ | ~~Categories + Products (Fixed & Variable Quantity) + Pricing Engine~~ ✅ |
 | ~~۳~~ | ~~Wallet Service کامل + Ledger + Manual Deposit + تأیید/رد ادمین~~ ✅ |
-| ۴ | Order Service + Wallet Payment + Delivery Engine (Manual/Code) |
+| ~~۴~~ | ~~Order Service + Wallet Payment + Delivery Engine (Manual/Code)~~ ✅ |
 | ۵ | Admin Panel کامل (`/admin`) با Role-based Permission |
 | ۶ | Coupon + Referral + VIP |
 | ۷ | Support/Ticket System + Broadcast + Audit Log |

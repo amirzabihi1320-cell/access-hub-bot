@@ -24,9 +24,5 @@ async def handle_start(message: Message) -> None:
         settings_service = SettingsService(session)
         shop_name = await settings_service.get("shop_name")
 
-    text = (
-        f"🌐 <b>{shop_name}</b>\n\n"
-        "خوش آمدید به Access Hub.\n"
-        "دسترسی آسان به سرویس‌ها و محصولات دیجیتال."
-    )
+    text = f"🌐 <b>{shop_name}</b>"
     await message.answer(text, reply_markup=main_reply_keyboard())

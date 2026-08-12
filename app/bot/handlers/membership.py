@@ -16,7 +16,7 @@ async def handle_membership_check(callback: CallbackQuery) -> None:
         is_member = await membership_service.is_user_member_of_all(callback.bot, callback.from_user.id)
 
     if is_member or not channels:
-        await callback.message.edit_text("✅ عضویت شما تأیید شد. خوش آمدید!")
-        await callback.message.answer("🌐 منوی اصلی:", reply_markup=main_reply_keyboard())
+        await callback.message.edit_text("✅ عضویت شما تأیید شد.")
+        await callback.message.answer("🌐 <b>Access Hub</b>", reply_markup=main_reply_keyboard())
     else:
         await callback.answer("❌ هنوز عضو همه‌ی کانال‌ها نشده‌اید.", show_alert=True)

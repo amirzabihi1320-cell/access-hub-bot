@@ -9,3 +9,5 @@ from app.models.required_channel import RequiredChannel  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.product import Product  # noqa: F401
 from app.models.deposit_request import DepositRequest  # noqa: F401
+from app.models.order import Order  # noqa: F401
+from app.models.inventory_code import InventoryCode  # noqa: F401

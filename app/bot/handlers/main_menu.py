@@ -2,6 +2,7 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from app.bot.handlers.account import build_account_view, build_referral_view
+from app.bot.handlers.orders import build_orders_view
 from app.bot.handlers.shop import build_categories_view
 from app.bot.handlers.wallet import build_wallet_view
 from app.bot.keyboards.reply_menu import (
@@ -26,7 +27,7 @@ settings = get_settings()
 
 async def _switch_to_home_keyboard(message: Message) -> None:
     """کیبورد ثابت را فقط به دکمه‌ی «منوی اصلی» تغییر می‌دهد."""
-    await message.answer("🏠 برای بازگشت، از دکمه پایین استفاده کنید.", reply_markup=home_reply_keyboard())
+    await message.answer("🏠", reply_markup=home_reply_keyboard())
 
 
 @router.message(F.text == SHOP)
@@ -82,7 +83,9 @@ async def handle_wallet_entry(message: Message) -> None:
 @router.message(F.text == ORDERS)
 async def handle_orders_entry(message: Message) -> None:
     await _switch_to_home_keyboard(message)
-    await message.answer("📦 سفارش‌های من در فاز بعدی فعال می‌شود.")
+    async with get_session() as session:
+        text = await build_orders_view(session, message.from_user)
+    await message.answer(text)
 
 
 @router.message(F.text == DISCOUNTS)
@@ -105,7 +108,4 @@ async def handle_channel_entry(message: Message) -> None:
 
 @router.message(F.text == HOME)
 async def handle_home(message: Message) -> None:
-    await message.answer(
-        "🌐 <b>Access Hub</b>\n\nمنوی اصلی:",
-        reply_markup=main_reply_keyboard(),
-    )
+    await message.answer("🌐 <b>Access Hub</b>", reply_markup=main_reply_keyboard())

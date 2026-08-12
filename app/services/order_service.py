@@ -1,0 +1,105 @@
+"""
+فاز ۴: سفارش‌ها + پرداخت با کیف پول + تحویل (بخش ۱۵-۱۹ سند).
+
+create_and_pay در یک واحد کاری اتمیک انجام می‌شود: ساخت سفارش → کسر از
+کیف پول (که خودش Ledger ثبت می‌کند) → تغییر وضعیت. اگر موجودی کافی نباشد،
+InsufficientBalanceError از WalletService بالا می‌آید و کل تراکنش (شامل
+ساخت سفارش) توسط get_session() rollback می‌شود؛ یعنی سفارش نیمه‌کاره
+باقی نمی‌ماند.
+
+چون هنوز Inventory/Provider API (فاز آینده) پیاده نشده، تحویل همیشه MANUAL
+است: سفارش در وضعیت WAITING_ADMIN می‌ماند تا ادمین با دکمه «تحویل شد»
+آن را COMPLETED کند.
+"""
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.enums import OrderStatus, WalletTransactionType
+from app.models.order import Order
+from app.models.product import Product
+from app.models.user import User
+from app.services.pricing_service import calculate_price
+from app.services.wallet_service import WalletService
+
+
+class OrderAlreadyProcessedError(Exception):
+    """این سفارش قبلاً تحویل داده شده یا در وضعیت دیگری است."""
+
+
+class ProductUnavailableError(Exception):
+    """محصول حذف/غیرفعال شده است."""
+
+
+class OrderService:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_and_pay(self, user_id: int, product_id: int, quantity: int) -> Order:
+        product = await self.session.get(Product, product_id)
+        if not product or not product.status:
+            raise ProductUnavailableError("این محصول در دسترس نیست.")
+
+        # بررسی مجدد قیمت/تعداد درست قبل از برداشت پول (بخش ۱۶)
+        price = calculate_price(product, quantity)
+
+        order = Order(
+            user_id=user_id,
+            product_id=product_id,
+            quantity=price.quantity,
+            unit_price=price.unit_price,
+            final_price=price.total_price,
+            status=OrderStatus.PENDING.value,
+            delivery_type="MANUAL",
+        )
+        self.session.add(order)
+        await self.session.flush()  # برای گرفتن order.id قبل از commit
+        order.order_number = f"AH-{order.id:06d}"
+
+        # اگر موجودی کافی نباشد، اینجا Exception بالا می‌رود و کل session
+        # (شامل ساخت سفارش بالا) توسط get_session() rollback می‌شود.
+        await WalletService(self.session).debit(
+            user_id=user_id,
+            amount=price.total_price,
+            type_=WalletTransactionType.PURCHASE,
+            reference_id=f"order:{order.id}",
+            description=f"خرید {product.name}",
+        )
+
+        order.status = OrderStatus.WAITING_ADMIN.value
+
+        user = await self.session.get(User, user_id)
+        user.total_purchases += 1
+        user.total_spent += price.total_price
+
+        await self.session.commit()
+        await self.session.refresh(order)
+        return order
+
+    async def get(self, order_id: int) -> Order | None:
+        result = await self.session.execute(select(Order).where(Order.id == order_id))
+        return result.scalar_one_or_none()
+
+    async def _get_locked(self, order_id: int) -> Order | None:
+        result = await self.session.execute(
+            select(Order).where(Order.id == order_id).with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def mark_delivered(self, order_id: int) -> Order:
+        order = await self._get_locked(order_id)
+        if order is None:
+            raise ValueError("سفارش پیدا نشد.")
+        if order.status != OrderStatus.WAITING_ADMIN.value:
+            raise OrderAlreadyProcessedError("این سفارش قبلاً پردازش شده است.")
+        order.status = OrderStatus.COMPLETED.value
+        await self.session.commit()
+        return order
+
+    async def list_for_user(self, user_id: int, limit: int = 10) -> list[Order]:
+        result = await self.session.execute(
+            select(Order)
+            .where(Order.user_id == user_id)
+            .order_by(Order.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())

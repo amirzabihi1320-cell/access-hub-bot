@@ -3,14 +3,28 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot.keyboards.orders import admin_order_deliver_keyboard
 from app.bot.keyboards.shop import categories_keyboard, product_detail_keyboard, products_keyboard
 from app.bot.states.shop_states import ProductQuantityStates
+from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.category_service import CategoryService
+from app.services.order_service import (
+    InsufficientBalanceError,
+    OrderService,
+    ProductUnavailableError,
+)
 from app.services.pricing_service import InvalidQuantityError, calculate_price
 from app.services.product_service import ProductService
+from app.services.user_service import UserService
 
 router = Router(name="shop")
+settings = get_settings()
+
+# قفل درون‌حافظه‌ای برای جلوگیری از دوبار کلیک روی پرداخت قبل از تمام‌شدن
+# پردازش قبلی (بخش ۱۷: جلوگیری از Duplicate Order). چون سرویس روی Render
+# تک‌پردازه اجرا می‌شود، این سطح از محافظت برای این فاز کافی است.
+_processing_purchases: set[int] = set()
 
 
 async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeyboardMarkup] | None:
@@ -18,7 +32,7 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     categories = await CategoryService(session).list_active()
     if not categories:
         return None
-    return "🛍 دسته‌بندی‌ها را انتخاب کنید:", categories_keyboard(categories)
+    return "🛍 دسته‌بندی‌ها", categories_keyboard(categories)
 
 
 @router.callback_query(F.data == "menu:shop")
@@ -85,7 +99,7 @@ async def handle_enter_quantity(callback: CallbackQuery, state: FSMContext) -> N
     await state.update_data(product_id=product_id)
     await state.set_state(ProductQuantityStates.WAITING_QUANTITY)
 
-    await callback.message.edit_text("🔢 تعداد مورد نظر را وارد کنید:")
+    await callback.message.edit_text("🔢 تعداد:")
     await callback.answer()
 
 
@@ -134,8 +148,72 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data.startswith("shop:buy:"))
-async def handle_buy_placeholder(callback: CallbackQuery) -> None:
-    # پرداخت واقعی با کیف پول در فاز ۳/۴ پیاده‌سازی می‌شود.
-    await callback.answer(
-        "💰 سیستم پرداخت با کیف پول در فاز بعدی فعال می‌شود.", show_alert=True
-    )
+async def handle_buy(callback: CallbackQuery) -> None:
+    user_id = callback.from_user.id
+    if user_id in _processing_purchases:
+        await callback.answer("⏳ درخواست قبلی در حال پردازش است.", show_alert=True)
+        return
+
+    _processing_purchases.add(user_id)
+    try:
+        parts = callback.data.split(":")
+        product_id, quantity = int(parts[2]), int(parts[3])
+
+        async with get_session() as session:
+            user = await UserService(session).get_or_create(
+                user_id, callback.from_user.username, callback.from_user.first_name,
+                callback.from_user.last_name,
+            )
+            product = await ProductService(session).get(product_id)
+            order_service = OrderService(session)
+            try:
+                order = await order_service.create_and_pay(user.id, product_id, quantity)
+            except InsufficientBalanceError:
+                await callback.answer("❌ موجودی کیف پول کافی نیست.", show_alert=True)
+                return
+            except (ProductUnavailableError, InvalidQuantityError, ValueError) as e:
+                await callback.answer(f"❌ {e}", show_alert=True)
+                return
+
+        await callback.message.edit_text(
+            f"✅ <b>پرداخت موفق</b>\n\n"
+            f"{product.name} — {order.final_price:,} تومان\n"
+            f"شماره سفارش: #{order.order_number}\n\n"
+            "سفارش شما برای آماده‌سازی ارسال شد.",
+        )
+        await callback.answer()
+
+        # اطلاع به ادمین‌ها برای تحویل دستی (بخش ۱۸) + گزارش به کانال (بخش ۳۳)
+        username = f"@{callback.from_user.username}" if callback.from_user.username else "—"
+        admin_text = (
+            "🛍 <b>سفارش جدید</b>\n\n"
+            f"کاربر: {username}\n"
+            f"محصول: {product.name}\n"
+            f"تعداد: {order.quantity}\n"
+            f"مبلغ: {order.final_price:,} تومان\n"
+            f"سفارش: #{order.order_number}"
+        )
+        for admin_id in settings.admin_ids:
+            try:
+                await callback.bot.send_message(
+                    chat_id=admin_id,
+                    text=admin_text,
+                    reply_markup=admin_order_deliver_keyboard(order.id),
+                )
+            except Exception:
+                continue
+
+        try:
+            await callback.bot.send_message(
+                chat_id=settings.report_channel_id,
+                text=(
+                    "🛍 <b>سفارش جدید</b>\n\n"
+                    f"محصول: {product.name}\n"
+                    f"سفارش: #{order.order_number}\n"
+                    "وضعیت: 🔄 در حال آماده‌سازی"
+                ),
+            )
+        except Exception:
+            pass
+    finally:
+        _processing_purchases.discard(user_id)
