@@ -46,6 +46,14 @@ class DepositService:
         )
         return result.scalar_one_or_none()
 
+    async def list_pending(self) -> list[DepositRequest]:
+        result = await self.session.execute(
+            select(DepositRequest)
+            .where(DepositRequest.status == DepositRequestStatus.PENDING.value)
+            .order_by(DepositRequest.created_at)
+        )
+        return list(result.scalars().all())
+
     async def _get_locked(self, request_id: int) -> DepositRequest | None:
         result = await self.session.execute(
             select(DepositRequest).where(DepositRequest.id == request_id).with_for_update()
@@ -90,3 +98,22 @@ class DepositService:
         request.reject_reason = reason
         await self.session.commit()
         return request
+
+    async def list_pending(self, limit: int = 20) -> list[DepositRequest]:
+        result = await self.session.execute(
+            select(DepositRequest)
+            .where(DepositRequest.status == DepositRequestStatus.PENDING.value)
+            .order_by(DepositRequest.created_at)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def count_pending(self) -> int:
+        from sqlalchemy import func
+
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(DepositRequest)
+            .where(DepositRequest.status == DepositRequestStatus.PENDING.value)
+        )
+        return result.scalar_one()

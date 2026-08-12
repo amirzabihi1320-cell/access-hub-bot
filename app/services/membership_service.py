@@ -45,3 +45,22 @@ class MembershipService:
                 return False
 
         return True
+
+    # ---------- ادمین (بخش ۶: مدیریت کانال‌های اجباری) ----------
+
+    async def list_all_channels(self) -> list[RequiredChannel]:
+        result = await self.session.execute(
+            select(RequiredChannel).order_by(RequiredChannel.sort_order)
+        )
+        return list(result.scalars().all())
+
+    async def toggle_channel(self, channel_id: int) -> RequiredChannel:
+        result = await self.session.execute(
+            select(RequiredChannel).where(RequiredChannel.id == channel_id)
+        )
+        channel = result.scalar_one_or_none()
+        if channel is None:
+            raise ValueError("کانال پیدا نشد.")
+        channel.is_active = not channel.is_active
+        await self.session.commit()
+        return channel

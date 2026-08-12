@@ -60,3 +60,7 @@ class UserService:
             select(func.count()).select_from(User).where(User.referred_by == user_id)
         )
         return result.scalar_one()
+
+    async def count_all(self) -> int:
+        result = await self.session.execute(select(func.count()).select_from(User))
+        return result.scalar_one()

@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
+from app.bot.handlers import admin as admin_handler
 from app.bot.handlers import main_menu as main_menu_handler
 from app.bot.handlers import membership as membership_handler
 from app.bot.handlers import orders as orders_handler
@@ -40,8 +41,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(shop_handler.router)
     dp.include_router(wallet_handler.router)
     dp.include_router(orders_handler.router)
-    # روترهای فازهای بعد اینجا include می‌شوند:
-    # dp.include_router(admin_handler.router)
+    dp.include_router(admin_handler.router)
 
     return dp
 

@@ -11,7 +11,7 @@ InsufficientBalanceError از WalletService بالا می‌آید و کل تر�
 است: سفارش در وضعیت WAITING_ADMIN می‌ماند تا ادمین با دکمه «تحویل شد»
 آن را COMPLETED کند.
 """
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import OrderStatus, WalletTransactionType
@@ -20,7 +20,6 @@ from app.models.product import Product
 from app.models.user import User
 from app.services.pricing_service import calculate_price
 from app.services.wallet_service import WalletService
-
 
 class OrderAlreadyProcessedError(Exception):
     """این سفارش قبلاً تحویل داده شده یا در وضعیت دیگری است."""
@@ -103,3 +102,23 @@ class OrderService:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    # ---------- ادمین (بخش ۲۸: Dashboard) ----------
+
+    async def count_all(self) -> int:
+        result = await self.session.execute(select(func.count()).select_from(Order))
+        return result.scalar_one()
+
+    async def count_pending(self) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(Order).where(Order.status == OrderStatus.WAITING_ADMIN.value)
+        )
+        return result.scalar_one()
+
+    async def total_revenue(self) -> int:
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(Order.final_price), 0)).where(
+                Order.status.in_([OrderStatus.WAITING_ADMIN.value, OrderStatus.COMPLETED.value])
+            )
+        )
+        return result.scalar_one()

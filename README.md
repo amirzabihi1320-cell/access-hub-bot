@@ -2,7 +2,7 @@
 
 ربات فروشگاهی ماژولار برای فروش محصولات دیجیتال داخل تلگرام.
 
-## وضعیت فعلی (تا پایان فاز ۴)
+## وضعیت فعلی (تا پایان فاز ۵)
 
 تا اینجا پیاده‌سازی شده:
 
@@ -12,11 +12,16 @@
 - ✅ `/start` + منوی اصلی + Membership Check + حساب کاربری/Referral (فاز ۱)
 - ✅ دسته‌بندی‌ها + محصولات Fixed/Variable Quantity + Pricing Engine (فاز ۲)
 - ✅ کیف پول کامل + Wallet Ledger + شارژ دستی + تأیید/رد ادمین (فاز ۳)
-- ✅ **سفارش‌ها + پرداخت آنی با کیف پول + تحویل دستی توسط ادمین (فاز ۴)**
+- ✅ سفارش‌ها + پرداخت آنی با کیف پول + تحویل دستی توسط ادمین (فاز ۴)
+- ✅ **پنل ادمین (`/admin`) کامل: داشبورد، محصولات (افزودن/قیمت/فعال-غیرفعال)،
+  دسته‌بندی‌ها (افزودن/فعال-غیرفعال)، تنظیمات، عضویت اجباری، شارژهای در
+  انتظار، سفارش‌های در انتظار (فاز ۵)**
+- ✅ متن‌های ربات به حداقل ضروری کاهش پیدا کرد (بدون شلوغی اضافه)
 - ✅ Dockerfile + docker-compose، تست‌های SQLite in-memory
 
-هنوز پیاده نشده: پنل ادمین کامل (فاز ۵)، کوپن/رفرال reward/VIP (فاز ۶)،
-تیکت/Broadcast/Audit Log (فاز ۷)، Telegram Stars (فاز ۸).
+هنوز پیاده نشده: Role-based Permission چندسطحی برای ادمین‌ها (فعلاً هر
+ADMIN_IDS دسترسی کامل دارد)، کوپن/رفرال reward/VIP (فاز ۶)، تیکت/
+Broadcast/Audit Log (فاز ۷)، Telegram Stars (فاز ۸).
 
 ---
 
@@ -123,7 +128,7 @@ Handler فقط پیام تلگرام را می‌گیرد → Service را صد�
 | ~~۲~~ | ~~Categories + Products (Fixed & Variable Quantity) + Pricing Engine~~ ✅ |
 | ~~۳~~ | ~~Wallet Service کامل + Ledger + Manual Deposit + تأیید/رد ادمین~~ ✅ |
 | ~~۴~~ | ~~Order Service + Wallet Payment + Delivery Engine (Manual/Code)~~ ✅ |
-| ۵ | Admin Panel کامل (`/admin`) با Role-based Permission |
+| ~~۵~~ | ~~Admin Panel (`/admin`): داشبورد، محصولات، دسته‌بندی‌ها، تنظیمات، عضویت اجباری~~ ✅ |
 | ۶ | Coupon + Referral + VIP |
 | ۷ | Support/Ticket System + Broadcast + Audit Log |
 | ۸ | Telegram Stars Payment + تست‌های کامل + Deployment نهایی |
