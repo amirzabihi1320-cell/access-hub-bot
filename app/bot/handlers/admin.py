@@ -424,7 +424,7 @@ async def handle_admin_setting_edit_start(callback: CallbackQuery, state: FSMCon
     key = callback.data.split(":", 3)[3]
     label = EDITABLE_SETTINGS.get(key, key)
     async with get_session() as session:
-        current = await SettingsService(session).get(key, "")
+        current = await SettingsService(session).get(key)
     await state.set_state(AdminStates.WAITING_SETTING_VALUE)
     await state.update_data(setting_key=key)
     await callback.message.edit_text(
@@ -440,8 +440,17 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
         return
     data = await state.get_data()
     key = data.get("setting_key")
+    value = message.text.strip()
+
+    # اعتبارسنجی ویژه‌ی «تعداد دکمه در هر ردیف» - باید عددی بین ۱ تا ۳ باشد،
+    # وگرنه مقدار نامعتبر ذخیره می‌شود و در ظاهر فروشگاه هیچ اثری نمی‌گذارد.
+    if key == "shop_buttons_per_row":
+        if not value.isdigit() or not (1 <= int(value) <= 3):
+            await message.answer("❗️ فقط عدد ۱ یا ۲ یا ۳ را وارد کنید (تعداد دکمه در هر ردیف).")
+            return
+
     async with get_session() as session:
-        await SettingsService(session).set(key, message.text.strip())
+        await SettingsService(session).set(key, value)
     await state.clear()
     label = EDITABLE_SETTINGS.get(key, key)
     await message.answer(f"✅ «{label}» به‌روزرسانی شد.")

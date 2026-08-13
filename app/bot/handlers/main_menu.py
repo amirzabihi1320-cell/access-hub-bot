@@ -5,6 +5,7 @@ from aiogram.types import Message
 from app.bot.handlers.account import build_account_view, build_referral_view
 from app.bot.handlers.orders import build_orders_view
 from app.bot.handlers.shop import build_categories_view
+from app.bot.handlers.wallet import build_wallet_view
 from app.bot.keyboards.reply_menu import (
     ACCOUNT,
     CHANNEL,
@@ -28,8 +29,18 @@ settings = get_settings()
 
 
 async def _switch_to_home_keyboard(message: Message) -> None:
-    """کیبورد ثابت را فقط به دکمه‌ی «منوی اصلی» تغییر می‌دهد."""
-    await message.answer("🏠", reply_markup=home_reply_keyboard())
+    """
+    کیبورد ثابت پایین صفحه را فقط به دکمه‌ی «منوی اصلی» تغییر می‌دهد.
+    تلگرام برای تغییر کیبورد ثابت نیاز به ارسال یک پیام دارد، اما خودِ آن
+    پیام («🏠») چیزی نیست که کاربر باید ببیند؛ به همین دلیل بلافاصله بعد
+    از ارسال حذف می‌شود. حذف پیام، کیبورد ثابتی که همین پیام تنظیم کرده را
+    از پایین صفحه پاک نمی‌کند (رفتار استاندارد تلگرام است).
+    """
+    sent = await message.answer("🏠", reply_markup=home_reply_keyboard())
+    try:
+        await message.bot.delete_message(message.chat.id, sent.message_id)
+    except Exception:
+        pass
 
 
 async def _welcome_text() -> str:
