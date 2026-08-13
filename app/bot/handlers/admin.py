@@ -9,7 +9,7 @@
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 
 from app.bot.keyboards.admin import (
@@ -26,12 +26,14 @@ from app.bot.keyboards.admin import (
     admin_products_keyboard,
     admin_settings_keyboard,
 )
+from app.bot.keyboards.wallet import admin_deposit_decision_keyboard
 from app.bot.states.admin_states import AdminStates
 from app.config.settings import get_settings
-from app.core.enums import OrderStatus
+from app.core.enums import DepositRequestStatus, OrderStatus
 from app.database.base import get_session
 from app.models.order import Order
 from app.models.product import Product
+from app.models.user import User
 from app.services.category_service import CategoryService
 from app.services.deposit_service import DepositService
 from app.services.membership_service import MembershipService
@@ -469,11 +471,62 @@ async def handle_admin_deposits(callback: CallbackQuery) -> None:
         await callback.answer()
         return
 
-    text = "💳 <b>شارژهای در انتظار</b>\n\n" + "\n".join(
-        f"#{r.id} — {r.amount:,} تومان" for r in requests
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"#{r.id} — {r.amount:,} تومان", callback_data=f"admin:deposit:view:{r.id}"
+            )
+        ]
+        for r in requests
+    ]
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
+    await callback.message.edit_text(
+        "💳 <b>شارژهای در انتظار</b>\n\nبرای بررسی رسید و تأیید/رد، روی هر درخواست بزنید:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
-    await callback.message.edit_text(text, reply_markup=admin_back_keyboard())
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:deposit:view:"))
+async def handle_admin_deposit_view(callback: CallbackQuery) -> None:
+    """
+    رسید یک درخواست شارژ را همراه دکمه‌ی تأیید/رد نمایش می‌دهد. این همان
+    دکمه‌هایی است که موقع ارسال رسید هم مستقیم برای ادمین ارسال می‌شود؛
+    اینجا یک راه دوم برای دسترسی به آن‌هاست، برای وقتی پیام اصلی از دست رفته.
+    """
+    request_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        request = await DepositService(session).get(request_id)
+        target_user = await session.get(User, request.user_id) if request else None
+
+    if not request:
+        await callback.answer("درخواست پیدا نشد.", show_alert=True)
+        return
+    if request.status != DepositRequestStatus.PENDING.value:
+        await callback.answer("این درخواست قبلاً بررسی شده است.", show_alert=True)
+        return
+
+    username = f"@{target_user.username}" if target_user and target_user.username else "—"
+    tg_id = target_user.telegram_id if target_user else "—"
+    caption = (
+        "💰 <b>درخواست شارژ کیف پول</b>\n\n"
+        f"کاربر: {username}\n"
+        f"Telegram ID: <code>{tg_id}</code>\n\n"
+        f"مبلغ: <b>{request.amount:,} تومان</b>\n"
+        f"شماره درخواست: #{request.id}"
+    )
+    await callback.answer()
+    if request.receipt_file_id:
+        await callback.message.answer_photo(
+            photo=request.receipt_file_id,
+            caption=caption,
+            reply_markup=admin_deposit_decision_keyboard(request.id),
+        )
+    else:
+        await callback.message.answer(
+            caption + "\n\n⚠️ رسیدی برای این درخواست ثبت نشده.",
+            reply_markup=admin_deposit_decision_keyboard(request.id),
+        )
 
 
 # ---------- سفارش‌های در انتظار ----------

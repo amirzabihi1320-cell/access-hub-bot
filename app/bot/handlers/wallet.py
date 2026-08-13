@@ -207,14 +207,28 @@ async def handle_admin_approve(callback: CallbackQuery) -> None:
         except DepositAlreadyDecidedError:
             await callback.answer("این درخواست قبلاً بررسی شده است.", show_alert=True)
             return
+        except Exception:
+            # اگر شارژ به هر دلیلی (خطای دیتابیس و ...) انجام نشد، ادمین باید
+            # بی‌درنگ بفهمد تا موجودی کاربر بدون اطلاع خالی نماند.
+            await callback.answer("❌ خطا در تأیید. موجودی شارژ نشد؛ دوباره تلاش کنید.", show_alert=True)
+            return
 
         new_balance = await WalletService(session).get_balance(request.user_id)
         target_user = await session.get(User, request.user_id)
 
-    await callback.message.edit_caption(
-        caption=callback.message.caption + "\n\n✅ <b>تأیید شد</b>",
-        reply_markup=None,
-    )
+    # این دکمه هم از پیام رسید (عکس با caption) و هم از لیست ادمین (پیام متنی
+    # بدون عکس) قابل کلیک است؛ برای هر دو حالت به‌درستی ویرایش می‌کنیم.
+    try:
+        if callback.message.caption is not None:
+            await callback.message.edit_caption(
+                caption=callback.message.caption + "\n\n✅ <b>تأیید شد</b>", reply_markup=None
+            )
+        else:
+            await callback.message.edit_text(
+                callback.message.text + "\n\n✅ <b>تأیید شد</b>", reply_markup=None
+            )
+    except Exception:
+        pass
     await callback.answer("تأیید شد ✅")
 
     if target_user:
@@ -229,7 +243,6 @@ async def handle_admin_approve(callback: CallbackQuery) -> None:
             )
         except Exception:
             pass
-
 
 @router.callback_query(F.data.startswith("admin:deposit:reject:"))
 async def handle_admin_reject(callback: CallbackQuery) -> None:
@@ -248,10 +261,18 @@ async def handle_admin_reject(callback: CallbackQuery) -> None:
             return
         target_user = await session.get(User, request.user_id)
 
-    await callback.message.edit_caption(
-        caption=callback.message.caption + "\n\n❌ <b>رد شد</b>",
-        reply_markup=None,
-    )
+    # مثل تأیید، این دکمه هم ممکن است از پیام عکس‌دار و هم از پیام متنی زده شود.
+    try:
+        if callback.message.caption is not None:
+            await callback.message.edit_caption(
+                caption=callback.message.caption + "\n\n❌ <b>رد شد</b>", reply_markup=None
+            )
+        else:
+            await callback.message.edit_text(
+                callback.message.text + "\n\n❌ <b>رد شد</b>", reply_markup=None
+            )
+    except Exception:
+        pass
     await callback.answer("رد شد ❌")
 
     if target_user:
@@ -259,9 +280,9 @@ async def handle_admin_reject(callback: CallbackQuery) -> None:
             await callback.bot.send_message(
                 chat_id=target_user.telegram_id,
                 text=(
-                    "❌ <b>درخواست شارژ کیف پول رد شد</b>\n\n"
-                    f"مبلغ: {request.amount:,} تومان\n"
-                    "در صورت اشتباه، با پشتیبانی تماس بگیرید."
+                    "❌ <b>رسید شما توسط ادمین رد شد</b>\n\n"
+                    f"مبلغ: {request.amount:,} تومان\n\n"
+                    "می‌توانید با پشتیبانی در ارتباط باشید."
                 ),
             )
         except Exception:

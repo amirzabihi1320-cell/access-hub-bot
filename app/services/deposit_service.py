@@ -46,14 +46,6 @@ class DepositService:
         )
         return result.scalar_one_or_none()
 
-    async def list_pending(self) -> list[DepositRequest]:
-        result = await self.session.execute(
-            select(DepositRequest)
-            .where(DepositRequest.status == DepositRequestStatus.PENDING.value)
-            .order_by(DepositRequest.created_at)
-        )
-        return list(result.scalars().all())
-
     async def _get_locked(self, request_id: int) -> DepositRequest | None:
         result = await self.session.execute(
             select(DepositRequest).where(DepositRequest.id == request_id).with_for_update()
@@ -70,9 +62,16 @@ class DepositService:
         request.status = DepositRequestStatus.APPROVED.value
         request.decided_by_admin_id = admin_id
         request.decided_at = datetime.now(timezone.utc)
-        await self.session.commit()
 
-        # افزایش موجودی فقط از طریق WalletService و بعد از قطعی شدن تأیید
+        # نکته‌ی مهم (اصل ۵۸ سند - Atomic بودن عملیات مالی):
+        # قبلاً اینجا یک commit() جداگانه بعد از تغییر status و قبل از
+        # WalletService.credit() وجود داشت. اگر credit() به هر دلیلی
+        # (خطای موقتی دیتابیس و ...) شکست می‌خورد، درخواست برای همیشه
+        # APPROVED می‌ماند ولی موجودی کاربر هرگز شارژ نمی‌شد و چون
+        # وضعیت دیگر PENDING نبود، امکان تلاش دوباره هم نبود - همان
+        # چیزی که باعث می‌شد تأیید ادمین در عمل موجودی را افزایش ندهد.
+        # الان تغییر status و افزایش موجودی هر دو در یک تراکنش (یک commit)
+        # با هم ذخیره یا با هم رد می‌شوند.
         await WalletService(self.session).credit(
             user_id=request.user_id,
             amount=request.amount,
