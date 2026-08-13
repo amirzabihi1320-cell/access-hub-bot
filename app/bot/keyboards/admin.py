@@ -2,9 +2,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 EDITABLE_SETTINGS = {
     "shop_name": "نام فروشگاه",
+    "welcome_text": "متن خوشامدگویی (صفحه اصلی)",
     "card_number": "شماره کارت",
     "card_holder_name": "به نام (صاحب کارت)",
     "payment_description": "توضیحات پرداخت",
+    "shop_buttons_per_row": "تعداد دکمه در هر ردیف فروشگاه (۱ تا ۳)",
 }
 
 
@@ -38,11 +40,27 @@ def admin_categories_keyboard(categories) -> InlineKeyboardMarkup:
     for c in categories:
         mark = "🟢" if c.status else "🔴"
         rows.append(
-            [InlineKeyboardButton(text=f"{mark} {c.icon or ''} {c.name}", callback_data=f"admin:category:toggle:{c.id}")]
+            [
+                InlineKeyboardButton(
+                    text=f"{mark} {c.icon or ''} {c.name}", callback_data=f"admin:category:toggle:{c.id}"
+                ),
+                InlineKeyboardButton(text="🗑", callback_data=f"admin:category:del:{c.id}"),
+            ]
         )
     rows.append([InlineKeyboardButton(text="➕ افزودن دسته‌بندی", callback_data="admin:category:add")])
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_category_delete_confirm_keyboard(category_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ بله، حذف کن", callback_data=f"admin:category:delyes:{category_id}"),
+                InlineKeyboardButton(text="❌ انصراف", callback_data="admin:categories"),
+            ]
+        ]
+    )
 
 
 def admin_products_keyboard(products) -> InlineKeyboardMarkup:
@@ -53,6 +71,17 @@ def admin_products_keyboard(products) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="➕ افزودن محصول", callback_data="admin:product:add")])
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_product_delete_confirm_keyboard(product_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ بله، حذف کن", callback_data=f"admin:product:delyes:{product_id}"),
+                InlineKeyboardButton(text="❌ انصراف", callback_data="admin:products"),
+            ]
+        ]
+    )
 
 
 def admin_product_category_pick_keyboard(categories) -> InlineKeyboardMarkup:
@@ -82,6 +111,7 @@ def admin_product_detail_keyboard(product) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="💰 تغییر قیمت", callback_data=f"admin:product:price:{product.id}")],
             [InlineKeyboardButton(text=mark, callback_data=f"admin:product:toggle:{product.id}")],
+            [InlineKeyboardButton(text="🗑 حذف محصول", callback_data=f"admin:product:del:{product.id}")],
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products")],
         ]
     )

@@ -17,6 +17,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "card_holder_name": "",
     "payment_description": "",
     "membership_requirement": "DISABLED",  # ALL / PURCHASE_ONLY / BOT_USE_ONLY / DISABLED
+    # متن خوشامدگویی صفحه‌ی اصلی (بخش ۵ و ۳۱ سند). از {shop_name} پشتیبانی می‌کند.
+    "welcome_text": "خوش آمدید به {shop_name}.\nدسترسی آسان به سرویس‌ها و محصولات دیجیتال.",
+    # تعداد دکمه در هر ردیف برای لیست دسته‌بندی‌ها/محصولات (بخش ۴۱ سند - Navigation).
+    # عدد ۱ تا ۳؛ برای متن‌های نسبتاً بزرگ عدد ۱ پیشنهاد می‌شود.
+    "shop_buttons_per_row": "1",
 }
 
 

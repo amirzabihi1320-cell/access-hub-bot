@@ -2,24 +2,24 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.models.category import Category
 from app.models.product import Product
+from app.utils.keyboards import DEFAULT_COLUMNS, chunk_buttons
 
 
-def categories_keyboard(categories: list[Category]) -> InlineKeyboardMarkup:
+def categories_keyboard(categories: list[Category], columns: int = DEFAULT_COLUMNS) -> InlineKeyboardMarkup:
     buttons = []
     for cat in categories:
         icon = cat.icon or "📦"
         buttons.append(
-            [InlineKeyboardButton(text=f"{icon} {cat.name}", callback_data=f"shop:category:{cat.id}")]
+            InlineKeyboardButton(text=f"{icon} {cat.name}", callback_data=f"shop:category:{cat.id}")
         )
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(inline_keyboard=chunk_buttons(buttons, columns))
 
 
-def products_keyboard(products: list[Product], category_id: int) -> InlineKeyboardMarkup:
-    buttons = []
-    for p in products:
-        buttons.append([InlineKeyboardButton(text=p.name, callback_data=f"shop:product:{p.id}")])
-    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu:shop")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+def products_keyboard(products: list[Product], category_id: int, columns: int = DEFAULT_COLUMNS) -> InlineKeyboardMarkup:
+    buttons = [InlineKeyboardButton(text=p.name, callback_data=f"shop:product:{p.id}") for p in products]
+    rows = chunk_buttons(buttons, columns)
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu:shop")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def product_detail_keyboard(product: Product) -> InlineKeyboardMarkup:

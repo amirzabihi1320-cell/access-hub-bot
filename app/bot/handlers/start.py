@@ -23,6 +23,12 @@ async def handle_start(message: Message) -> None:
 
         settings_service = SettingsService(session)
         shop_name = await settings_service.get("shop_name")
+        welcome_text = await settings_service.get("welcome_text") or ""
 
-    text = f"🌐 <b>{shop_name}</b>"
+    try:
+        welcome_text = welcome_text.format(shop_name=shop_name)
+    except (KeyError, IndexError):
+        pass  # اگر ادمین Placeholder نامعتبر وارد کرده باشد، متن خام نمایش داده شود.
+
+    text = f"🌐 <b>{shop_name}</b>\n\n{welcome_text}" if welcome_text else f"🌐 <b>{shop_name}</b>"
     await message.answer(text, reply_markup=main_reply_keyboard())

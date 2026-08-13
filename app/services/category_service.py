@@ -1,7 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
+from app.models.product import Product
 
 
 class CategoryService:
@@ -38,3 +39,25 @@ class CategoryService:
         await self.session.commit()
         await self.session.refresh(category)
         return category
+
+    async def delete(self, category_id: int) -> None:
+        """
+        حذف دسته‌بندی. برای جلوگیری از پاک شدن ناخواسته‌ی محصولات (بخش ۵۸:
+        یکپارچگی مالی/داده)، تا وقتی حداقل یک محصول به این دسته‌بندی وصل است
+        اجازه‌ی حذف داده نمی‌شود؛ ادمین باید ابتدا محصولات را حذف/جابه‌جا کند.
+        """
+        category = await self.get(category_id)
+        if category is None:
+            raise ValueError("دسته‌بندی پیدا نشد.")
+
+        count_result = await self.session.execute(
+            select(func.count()).select_from(Product).where(Product.category_id == category_id)
+        )
+        product_count = count_result.scalar_one()
+        if product_count > 0:
+            raise ValueError(
+                f"این دسته‌بندی {product_count} محصول دارد. ابتدا محصولات آن را حذف یا غیرفعال کنید."
+            )
+
+        await self.session.delete(category)
+        await self.session.commit()

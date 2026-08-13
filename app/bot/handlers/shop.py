@@ -12,8 +12,11 @@ from app.services.category_service import CategoryService
 from app.services.order_service import OrderService, ProductUnavailableError
 from app.services.pricing_service import InvalidQuantityError, calculate_price
 from app.services.product_service import ProductService
+from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.services.wallet_service import InsufficientBalanceError
+from app.utils.keyboards import clamp_columns
+from app.utils.message_manager import MessageManager
 
 router = Router(name="shop")
 settings = get_settings()
@@ -29,7 +32,8 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     categories = await CategoryService(session).list_active()
     if not categories:
         return None
-    return "🛍 دسته‌بندی‌ها", categories_keyboard(categories)
+    columns = clamp_columns(await SettingsService(session).get("shop_buttons_per_row"))
+    return "🛍 دسته‌بندی‌ها", categories_keyboard(categories, columns)
 
 
 @router.callback_query(F.data == "menu:shop")
@@ -53,13 +57,16 @@ async def handle_category(callback: CallbackQuery) -> None:
     async with get_session() as session:
         products = await ProductService(session).list_by_category(category_id)
         category = await CategoryService(session).get(category_id)
+        columns = clamp_columns(await SettingsService(session).get("shop_buttons_per_row"))
 
     if not products:
         await callback.answer("محصولی در این دسته‌بندی نیست.", show_alert=True)
         return
 
     title = category.name if category else "محصولات"
-    await callback.message.edit_text(f"📂 {title}:", reply_markup=products_keyboard(products, category_id))
+    await callback.message.edit_text(
+        f"📂 {title}:", reply_markup=products_keyboard(products, category_id, columns)
+    )
     await callback.answer()
 
 
@@ -93,10 +100,12 @@ async def handle_product_detail(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("shop:enter_qty:"))
 async def handle_enter_quantity(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":")[2])
-    await state.update_data(product_id=product_id)
+    # آیدی همین پیام را نگه می‌داریم تا بعد از دریافت تعداد، هم این پیام و
+    # هم عددی که کاربر تایپ می‌کند پاک شوند و چت شلوغ نشود (بخش ۴ سند).
+    await state.update_data(product_id=product_id, qty_prompt_message_id=callback.message.message_id)
     await state.set_state(ProductQuantityStates.WAITING_QUANTITY)
 
-    await callback.message.edit_text("🔢 تعداد:")
+    await callback.message.edit_text("🔢 تعداد را وارد کنید:")
     await callback.answer()
 
 
@@ -104,9 +113,10 @@ async def handle_enter_quantity(callback: CallbackQuery, state: FSMContext) -> N
 async def handle_quantity_input(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     product_id = data["product_id"]
+    manager = MessageManager(message.bot, message.chat.id, state)
 
     if not message.text or not message.text.strip().isdigit():
-        await message.answer("❌ لطفاً فقط عدد وارد کنید.")
+        await manager.delete_message_id(message.message_id)
         return
 
     quantity = int(message.text.strip())
@@ -115,17 +125,29 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
         product = await ProductService(session).get(product_id)
 
     if not product:
-        await message.answer("❌ محصول پیدا نشد.")
+        await manager.delete_message_id(message.message_id)
+        prompt_id = data.get("qty_prompt_message_id")
+        if prompt_id:
+            await manager.delete_message_id(prompt_id)
         await state.clear()
+        await manager.send("❌ محصول پیدا نشد.")
         return
 
     try:
         result = calculate_price(product, quantity)
     except InvalidQuantityError as e:
+        await manager.delete_message_id(message.message_id)
         await message.answer(f"❌ {e}")
         return
 
-    await state.clear()
+    # پیام پرامپت «تعداد را وارد کنید» و پیامی که کاربر تایپ کرده هر دو پاک می‌شوند.
+    prompt_id = data.get("qty_prompt_message_id")
+    if prompt_id:
+        await manager.delete_message_id(prompt_id)
+    await manager.delete_message_id(message.message_id)
+
+    await state.update_data(qty_prompt_message_id=None)
+    await state.set_state(None)
 
     text = (
         f"🧾 <b>سفارش شما</b>\n\n"
@@ -141,11 +163,12 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"shop:category:{product.category_id}")],
         ]
     )
-    await message.answer(text, reply_markup=keyboard)
+    await manager.send(text, reply_markup=keyboard)
+    await state.clear()
 
 
 @router.callback_query(F.data.startswith("shop:buy:"))
-async def handle_buy(callback: CallbackQuery) -> None:
+async def handle_buy(callback: CallbackQuery, state: FSMContext) -> None:
     user_id = callback.from_user.id
     if user_id in _processing_purchases:
         await callback.answer("⏳ درخواست قبلی در حال پردازش است.", show_alert=True)
@@ -179,6 +202,10 @@ async def handle_buy(callback: CallbackQuery) -> None:
             "سفارش شما برای آماده‌سازی ارسال شد.",
         )
         await callback.answer()
+        # این پیام حالا حاوی «رسید تأیید سفارش» است (دسته PAYMENT/ORDER در بخش ۴
+        # سند) و نباید هرگز خودکار پاک شود؛ پس آن را از ردیابی پیام‌های موقت
+        # خارج می‌کنیم تا با پاکسازی مرحله‌ی بعد از بین نرود.
+        await state.update_data(temp_message_ids=[])
 
         # اطلاع به ادمین‌ها برای تحویل دستی (بخش ۱۸) + گزارش به کانال (بخش ۳۳)
         username = f"@{callback.from_user.username}" if callback.from_user.username else "—"

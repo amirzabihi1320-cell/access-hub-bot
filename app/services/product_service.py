@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.order import Order
 from app.models.product import Product
 
 
@@ -62,6 +63,30 @@ class ProductService:
         await self.session.commit()
         await self.session.refresh(product)
         return product
+
+    async def delete(self, product_id: int) -> None:
+        """
+        حذف محصول. طبق اصل ۵۸ سند (یکپارچگی مالی)، سابقه‌ی سفارش‌ها هرگز
+        نباید ناقص شود؛ پس اگر این محصول در حداقل یک سفارش استفاده شده،
+        حذف واقعی رد می‌شود و فقط پیشنهاد می‌شود «غیرفعال» شود (که تاریخچه
+        و گزارش‌های قبلی را دست‌نخورده نگه می‌دارد).
+        """
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+
+        count_result = await self.session.execute(
+            select(func.count()).select_from(Order).where(Order.product_id == product_id)
+        )
+        order_count = count_result.scalar_one()
+        if order_count > 0:
+            raise ValueError(
+                f"این محصول در {order_count} سفارش استفاده شده و برای حفظ سوابق مالی قابل حذف نیست. "
+                "به‌جای حذف، آن را غیرفعال کنید."
+            )
+
+        await self.session.delete(product)
+        await self.session.commit()
 
     async def create_variable(
         self, category_id: int, name: str, unit_price: int, min_quantity: int, max_quantity: int
