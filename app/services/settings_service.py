@@ -22,6 +22,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # تعداد دکمه در هر ردیف برای لیست دسته‌بندی‌ها/محصولات (بخش ۴۱ سند - Navigation).
     # عدد ۱ تا ۳؛ برای متن‌های نسبتاً بزرگ عدد ۱ پیشنهاد می‌شود.
     "shop_buttons_per_row": "1",
+    # ارسال گزارش خلاصه‌ی سفارش موفق به کانال گزارش‌ها (بخش ۳۳ سند).
+    "order_report_enabled": "true",
 }
 
 
@@ -49,3 +51,14 @@ class SettingsService:
     async def is_maintenance_mode(self) -> bool:
         value = await self.get("maintenance_mode", "false")
         return value.lower() == "true"
+
+    async def is_order_report_enabled(self) -> bool:
+        value = await self.get("order_report_enabled", "true")
+        return value.lower() == "true"
+
+    async def toggle_order_report(self) -> bool:
+        """وضعیت فعلی را برعکس می‌کند و مقدار جدید را برمی‌گرداند."""
+        current = await self.is_order_report_enabled()
+        new_value = "false" if current else "true"
+        await self.set("order_report_enabled", new_value)
+        return new_value == "true"

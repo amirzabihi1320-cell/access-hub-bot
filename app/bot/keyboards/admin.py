@@ -117,11 +117,15 @@ def admin_product_detail_keyboard(product) -> InlineKeyboardMarkup:
     )
 
 
-def admin_settings_keyboard() -> InlineKeyboardMarkup:
+def admin_settings_keyboard(report_enabled: bool = True) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}")]
         for key, label in EDITABLE_SETTINGS.items()
     ]
+    report_mark = "🟢 فعال" if report_enabled else "🔴 غیرفعال"
+    rows.append(
+        [InlineKeyboardButton(text=f"📢 گزارش سفارش در کانال: {report_mark}", callback_data="admin:setting:toggle_report")]
+    )
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

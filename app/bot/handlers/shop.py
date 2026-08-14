@@ -9,7 +9,7 @@ from app.bot.states.shop_states import ProductQuantityStates
 from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.category_service import CategoryService
-from app.services.order_service import OrderService, ProductUnavailableError
+from app.services.order_service import OrderService, ProductUnavailableError, build_order_report_text
 from app.services.pricing_service import InvalidQuantityError, calculate_price
 from app.services.product_service import ProductService
 from app.services.settings_service import SettingsService
@@ -228,16 +228,18 @@ async def handle_buy(callback: CallbackQuery, state: FSMContext) -> None:
                 continue
 
         try:
-            await callback.bot.send_message(
-                chat_id=settings.report_channel_id,
-                text=(
-                    "🛍 <b>سفارش جدید</b>\n\n"
-                    f"محصول: {product.name}\n"
-                    f"سفارش: #{order.order_number}\n"
-                    "وضعیت: 🔄 در حال آماده‌سازی"
-                ),
-            )
+            async with get_session() as session:
+                report_enabled = await SettingsService(session).is_order_report_enabled()
         except Exception:
-            pass
+            report_enabled = True
+
+        if report_enabled:
+            try:
+                await callback.bot.send_message(
+                    chat_id=settings.report_channel_id,
+                    text=build_order_report_text(order, product.name),
+                )
+            except Exception:
+                pass
     finally:
         _processing_purchases.discard(user_id)

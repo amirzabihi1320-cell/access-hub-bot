@@ -417,8 +417,22 @@ async def handle_admin_channel_toggle(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "admin:settings")
 async def handle_admin_settings(callback: CallbackQuery) -> None:
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=admin_settings_keyboard())
+    async with get_session() as session:
+        report_enabled = await SettingsService(session).is_order_report_enabled()
+    await callback.message.edit_text(
+        "⚙️ <b>تنظیمات</b>", reply_markup=admin_settings_keyboard(report_enabled)
+    )
     await callback.answer()
+
+
+@router.callback_query(F.data == "admin:setting:toggle_report")
+async def handle_admin_toggle_report(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        new_value = await SettingsService(session).toggle_order_report()
+    await callback.message.edit_text(
+        "⚙️ <b>تنظیمات</b>", reply_markup=admin_settings_keyboard(new_value)
+    )
+    await callback.answer("✅ ذخیره شد")
 
 
 @router.callback_query(F.data.startswith("admin:setting:edit:"))

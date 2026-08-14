@@ -11,7 +11,8 @@ from app.config.settings import get_settings
 from app.database.base import get_session
 from app.models.product import Product
 from app.models.user import User
-from app.services.order_service import OrderAlreadyProcessedError, OrderService
+from app.services.order_service import OrderAlreadyProcessedError, OrderService, build_order_report_text
+from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 
 router = Router(name="orders")
@@ -47,7 +48,7 @@ async def build_orders_view(session: AsyncSession, tg_user) -> str:
     for order in orders:
         product = await session.get(Product, order.product_id)
         label = STATUS_LABELS.get(order.status, order.status)
-        code = f"#{order.order_number}" if order.order_number else order.code
+        code = f"#{order.order_number}" if order.order_number else f"#{order.id}"
         lines.append(
             f"{code} — {product.name if product else '—'} — {order.final_price:,} تومان — {label}"
         )
@@ -71,6 +72,7 @@ async def handle_admin_deliver(callback: CallbackQuery) -> None:
             return
         target_user = await session.get(User, order.user_id)
         product = await session.get(Product, order.product_id)
+        report_enabled = await SettingsService(session).is_order_report_enabled()
 
     current_text = callback.message.text or callback.message.caption or ""
     await callback.message.edit_text(current_text + "\n\n✅ <b>تحویل شد</b>", reply_markup=None)
@@ -85,6 +87,16 @@ async def handle_admin_deliver(callback: CallbackQuery) -> None:
                     f"{product.name if product else ''}\n"
                     f"شماره سفارش: #{order.order_number}"
                 ),
+            )
+        except Exception:
+            pass
+
+    # به‌روزرسانی گزارش کانال با وضعیت نهایی «تکمیل شد» (بخش ۳۳ سند)
+    if report_enabled and product:
+        try:
+            await callback.bot.send_message(
+                chat_id=settings.report_channel_id,
+                text=build_order_report_text(order, product.name),
             )
         except Exception:
             pass

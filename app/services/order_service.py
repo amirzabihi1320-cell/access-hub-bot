@@ -122,3 +122,25 @@ class OrderService:
             )
         )
         return result.scalar_one()
+
+
+def build_order_report_text(order: Order, product_name: str) -> str:
+    """
+    متن گزارش خلاصه‌ی سفارش برای کانال گزارش‌ها (بخش ۳۳ سند).
+    عمداً هیچ اطلاعات حساسی (شماره تلفن، شماره کارت، آیدی عددی کاربر،
+    یوزرنیم و ...) در این متن قرار نمی‌گیرد.
+    """
+    status_labels = {
+        OrderStatus.WAITING_ADMIN.value: "🕐 در انتظار تحویل",
+        OrderStatus.COMPLETED.value: "✅ تکمیل شد",
+        OrderStatus.PAID.value: "✅ پرداخت شد",
+    }
+    status_text = status_labels.get(order.status, order.status)
+    return (
+        "🛍 <b>سفارش جدید</b>\n\n"
+        f"محصول:\n{product_name}\n\n"
+        f"تعداد: {order.quantity}\n"
+        f"مبلغ: {order.final_price:,} تومان\n\n"
+        f"Order:\n#{order.order_number}\n\n"
+        f"وضعیت:\n{status_text}"
+    )
