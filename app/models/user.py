@@ -20,6 +20,13 @@ class User(Base):
     total_purchases: Mapped[int] = mapped_column(Integer, default=0)
     total_spent: Mapped[int] = mapped_column(BigInteger, default=0)  # تومان (ریال در آینده قابل تغییر)
 
+    # Access Token: مستقل از کیف پول فروشگاه
+    token_balance: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    total_tokens_purchased: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    total_tokens_spent: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    total_tokens_won: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    total_game_fees_paid: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+
     referral_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     referred_by: Mapped[int | None] = mapped_column(
         Integer, nullable=True

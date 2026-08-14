@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     )
     log_level: str = Field("INFO", alias="LOG_LEVEL")
 
+    # --- Access Hub Game System ---
+    game_chat_id: int | None = Field(None, alias="GAME_CHAT_ID")
+    game_expiration_seconds: int = Field(900, alias="GAME_EXPIRATION_SECONDS")
+    game_min_entry: int = Field(10, alias="GAME_MIN_ENTRY")
+    game_max_entry: int = Field(1_000_000, alias="GAME_MAX_ENTRY")
+    game_scheduler_interval: int = Field(2, alias="GAME_SCHEDULER_INTERVAL")
+    game_reaction_delay_seconds: int = Field(3, alias="GAME_REACTION_DELAY_SECONDS")
+    game_active_timeout_seconds: int = Field(30, alias="GAME_ACTIVE_TIMEOUT_SECONDS")
+
     @property
     def admin_ids(self) -> list[int]:
         if not self.admin_ids_raw.strip():

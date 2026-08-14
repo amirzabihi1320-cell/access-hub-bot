@@ -15,10 +15,12 @@ from app.bot.handlers import orders as orders_handler
 from app.bot.handlers import shop as shop_handler
 from app.bot.handlers import start as start_handler
 from app.bot.handlers import wallet as wallet_handler
+from app.bot.handlers import games as games_handler
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
 from app.bot.middlewares.membership import MembershipMiddleware
 from app.config.settings import get_settings
 from app.database.seed import seed_initial_data
+from app.services.game_service import scheduler_loop
 
 settings = get_settings()
 
@@ -40,6 +42,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(main_menu_handler.router)
     dp.include_router(shop_handler.router)
     dp.include_router(wallet_handler.router)
+    dp.include_router(games_handler.router)
     dp.include_router(orders_handler.router)
     dp.include_router(admin_handler.router)
 
@@ -55,7 +58,13 @@ async def run_polling() -> None:
 
     logger.info("Access Hub bot starting in POLLING mode...")
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    scheduler_task = asyncio.create_task(scheduler_loop(bot))
+    try:
+        await dp.start_polling(bot)
+    finally:
+        scheduler_task.cancel()
+        await asyncio.gather(scheduler_task, return_exceptions=True)
+        await bot.session.close()
 
 
 async def health_check(_: web.Request) -> web.Response:
@@ -99,7 +108,14 @@ async def run_webhook() -> None:
     await site.start()
 
     logger.info(f"Web service listening on {settings.webapp_host}:{port}")
-    await asyncio.Event().wait()  # برای همیشه زنده بماند
+    scheduler_task = asyncio.create_task(scheduler_loop(bot))
+    try:
+        await asyncio.Event().wait()  # برای همیشه زنده بماند
+    finally:
+        scheduler_task.cancel()
+        await asyncio.gather(scheduler_task, return_exceptions=True)
+        await runner.cleanup()
+        await bot.session.close()
 
 
 def main() -> None:
