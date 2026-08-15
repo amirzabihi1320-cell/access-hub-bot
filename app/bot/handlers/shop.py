@@ -12,10 +12,8 @@ from app.services.category_service import CategoryService
 from app.services.order_service import OrderService, ProductUnavailableError, build_order_report_text
 from app.services.pricing_service import InvalidQuantityError, calculate_price
 from app.services.product_service import ProductService
-from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.services.wallet_service import InsufficientBalanceError
-from app.utils.keyboards import clamp_columns
 from app.utils.message_manager import MessageManager
 
 router = Router(name="shop")
@@ -32,8 +30,7 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     categories = await CategoryService(session).list_active()
     if not categories:
         return None
-    columns = clamp_columns(await SettingsService(session).get("shop_buttons_per_row"))
-    return "🛍 دسته‌بندی‌ها", categories_keyboard(categories, columns)
+    return "🛍 دسته‌بندی‌ها", categories_keyboard(categories, 1)
 
 
 @router.callback_query(F.data == "menu:shop")
@@ -57,7 +54,6 @@ async def handle_category(callback: CallbackQuery) -> None:
     async with get_session() as session:
         products = await ProductService(session).list_by_category(category_id)
         category = await CategoryService(session).get(category_id)
-        columns = clamp_columns(await SettingsService(session).get("shop_buttons_per_row"))
 
     if not products:
         await callback.answer("محصولی در این دسته‌بندی نیست.", show_alert=True)
@@ -65,7 +61,7 @@ async def handle_category(callback: CallbackQuery) -> None:
 
     title = category.name if category else "محصولات"
     await callback.message.edit_text(
-        f"📂 {title}:", reply_markup=products_keyboard(products, category_id, columns)
+        f"📂 {title}:", reply_markup=products_keyboard(products, category_id, 1)
     )
     await callback.answer()
 

@@ -472,7 +472,10 @@ async def handle_admin_channels(callback: CallbackQuery) -> None:
     async with get_session() as session:
         channels = await MembershipService(session).list_all_channels()
     if not channels:
-        await callback.message.edit_text("📢 کانالی ثبت نشده.", reply_markup=admin_back_keyboard())
+        await callback.message.edit_text(
+            "📢 <b>عضویت اجباری</b>\n\nهنوز کانالی ثبت نشده است.\nبرای شروع کانال را اضافه کنید.",
+            reply_markup=admin_channels_keyboard([]),
+        )
     else:
         await callback.message.edit_text(
             "📢 <b>کانال‌های اجباری</b>", reply_markup=admin_channels_keyboard(channels)
@@ -621,6 +624,18 @@ async def handle_admin_setting_edit_start(callback: CallbackQuery, state: FSMCon
     label = EDITABLE_SETTINGS.get(key, key)
     async with get_session() as session:
         current = await SettingsService(session).get(key)
+        if key == "payment_info" and not current:
+            card_number = await SettingsService(session).get("card_number") or ""
+            card_holder = await SettingsService(session).get("card_holder_name") or ""
+            description = await SettingsService(session).get("payment_description") or ""
+            parts = []
+            if card_number:
+                parts.append(f"شماره کارت:\n{card_number}")
+            if card_holder:
+                parts.append(f"به نام:\n{card_holder}")
+            if description:
+                parts.append(f"توضیحات:\n{description}")
+            current = "\n\n".join(parts)
     await state.set_state(AdminStates.WAITING_SETTING_VALUE)
     await state.update_data(setting_key=key)
     await callback.message.edit_text(
@@ -638,13 +653,6 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
     key = data.get("setting_key")
     value = message.text.strip()
 
-    # اعتبارسنجی ویژه‌ی «تعداد دکمه در هر ردیف» - باید عددی بین ۱ تا ۳ باشد،
-    # وگرنه مقدار نامعتبر ذخیره می‌شود و در ظاهر فروشگاه هیچ اثری نمی‌گذارد.
-    if key == "shop_buttons_per_row":
-        if not value.isdigit() or not (1 <= int(value) <= 3):
-            await message.answer("❗️ فقط عدد ۱ یا ۲ یا ۳ را وارد کنید (تعداد دکمه در هر ردیف).")
-            return
-
     if key == "token_transfer_fee_percent":
         try:
             fee = float(value)
@@ -654,17 +662,6 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
         if not 0 <= fee <= 100:
             await message.answer("❗️ کارمزد باید بین ۰ تا ۱۰۰ درصد باشد.")
             return
-
-    if key == "membership_requirement":
-        allowed = {"ALL", "PURCHASE_ONLY", "BOT_USE_ONLY", "DISABLED"}
-        if value.upper() not in allowed:
-            await message.answer(
-                "❗️ مقدار نامعتبر است. یکی از این‌ها را بفرستید:\n"
-                "<code>ALL</code>\n<code>BOT_USE_ONLY</code>\n"
-                "<code>PURCHASE_ONLY</code>\n<code>DISABLED</code>"
-            )
-            return
-        value = value.upper()
 
     async with get_session() as session:
         await SettingsService(session).set(key, value)

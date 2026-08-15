@@ -245,99 +245,20 @@ async def handle_deposit_amount(
     )
 
     if deposit_type == "TOKEN":
-
-        if value < 500:
-            await message.answer(
-                "❌ حداقل خرید 500 Token است."
-            )
-            return
-
-        # هر 500 توکن = 20,000 تومان
-        amount = (value * 20_000) // 500
-
-        # قیمت باید دقیقاً بر اساس واحد 500 Token باشد
-        if value % 500 != 0:
-            await message.answer(
-                "❌ تعداد Token باید مضربی از 500 باشد.\n\n"
-                "مثال: 500، 1000، 1500، 2000"
-            )
-            return
-
-        await state.update_data(
-            amount=amount,
-            token_amount=value,
-        )
-
-    else:
-
-        amount = value
-
-        await state.update_data(
-            amount=amount,
-            token_amount=None,
-        )
-
-    await state.set_state(
-        DepositStates.WAITING_RECEIPT
-    )
-
-    async with get_session() as session:
-
-        settings_service = SettingsService(session)
-
-        card_number = (
-            await settings_service.get("card_number")
-            or "ثبت نشده"
-        )
-
-        card_holder = (
-            await settings_service.get("card_holder_name")
-            or "ثبت نشده"
-        )
-
-        description = (
-            await settings_service.get("payment_description")
-            or ""
-        )
-
-    if deposit_type == "TOKEN":
-
-        token_amount = data.get("token_amount")
-
-        # چون state قبل از اینجا update شده،
-        # مقدار جدید را از value استفاده می‌کنیم.
         token_amount = value
-
         text = (
             "🪙 <b>شارژ Access Token</b>\n\n"
-            f"تعداد Token:\n"
-            f"<b>{token_amount:,} Token</b>\n\n"
-            f"مبلغ قابل پرداخت:\n"
-            f"<b>{amount:,} تومان</b>\n\n"
-            "💳 <b>اطلاعات کارت</b>\n\n"
-            f"شماره کارت:\n"
-            f"<code>{card_number}</code>\n\n"
-            f"به نام:\n"
-            f"{card_holder}\n"
+            f"تعداد Token:\n<b>{token_amount:,} Token</b>\n\n"
+            f"مبلغ قابل پرداخت:\n<b>{amount:,} تومان</b>\n\n"
+            "💳 <b>اطلاعات پرداخت</b>\n\n"
+            f"{payment_info}\n"
         )
-
     else:
-
         text = (
             "💳 <b>شارژ ریالی</b>\n\n"
-            f"مبلغ:\n"
-            f"<b>{amount:,} تومان</b>\n\n"
-            "💳 <b>اطلاعات کارت</b>\n\n"
-            f"شماره کارت:\n"
-            f"<code>{card_number}</code>\n\n"
-            f"به نام:\n"
-            f"{card_holder}\n"
-        )
-
-    if description:
-        text += (
-            f"\nتوضیحات:\n"
-            f"{description}\n"
+            f"مبلغ:\n<b>{amount:,} تومان</b>\n\n"
+            "💳 <b>اطلاعات پرداخت</b>\n\n"
+            f"{payment_info}\n"
         )
 
     text += (

@@ -11,21 +11,10 @@ from app.models.setting import Setting
 
 # مقادیر پیش‌فرض برای اولین اجرا (Seed) - فقط fallback، نه Hard-code منطق تجاری
 DEFAULT_SETTINGS: dict[str, str] = {
-    "shop_name": "Access Hub | مارکت دیجیتال",
     "maintenance_mode": "false",
-    "card_number": "",
-    "card_holder_name": "",
-    "payment_description": "",
-    "membership_requirement": "DISABLED",  # ALL / PURCHASE_ONLY / BOT_USE_ONLY / DISABLED
-    # متن خوشامدگویی صفحه‌ی اصلی (بخش ۵ و ۳۱ سند). از {shop_name} پشتیبانی می‌کند.
-    "welcome_text": "خوش آمدید به {shop_name}.\nدسترسی آسان به سرویس‌ها و محصولات دیجیتال.",
-    # تعداد دکمه در هر ردیف برای لیست دسته‌بندی‌ها/محصولات (بخش ۴۱ سند - Navigation).
-    # عدد ۱ تا ۳؛ برای متن‌های نسبتاً بزرگ عدد ۱ پیشنهاد می‌شود.
-    "shop_buttons_per_row": "1",
-    # ارسال گزارش خلاصه‌ی سفارش موفق به کانال گزارش‌ها (بخش ۳۳ سند).
+    "payment_info": "",
+    "welcome_text": "خوش آمدید.\nدسترسی آسان به سرویس‌ها و محصولات دیجیتال.",
     "order_report_enabled": "true",
-    "game_chat_id": "",
-    "game_chat_link": "",
     "token_transfer_fee_percent": "10",
 }
 

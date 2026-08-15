@@ -13,7 +13,6 @@ from app.bot.keyboards.membership import membership_keyboard
 from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.membership_service import MembershipService
-from app.services.settings_service import SettingsService
 
 EXEMPT_CALLBACKS = {"membership:check"}
 settings = get_settings()
@@ -47,11 +46,6 @@ class MembershipMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         async with get_session() as session:
-            requirement = await SettingsService(session).get("membership_requirement", "DISABLED")
-
-            if requirement not in ("ALL", "BOT_USE_ONLY"):
-                return await handler(event, data)
-
             membership_service = MembershipService(session)
             channels = await membership_service.get_active_channels()
             if not channels:

@@ -1,16 +1,11 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 EDITABLE_SETTINGS = {
-    "shop_name": "نام فروشگاه",
-    "welcome_text": "متن خوشامدگویی (صفحه اصلی)",
-    "card_number": "شماره کارت",
-    "card_holder_name": "به نام (صاحب کارت)",
-    "payment_description": "توضیحات پرداخت",
-    "shop_buttons_per_row": "تعداد دکمه در هر ردیف فروشگاه (۱ تا ۳)",
-    "game_chat_link": "🔗 لینک گپ بازی",
+    "welcome_text": "📝 متن خوشامدگویی",
+    "payment_info": "💳 اطلاعات پرداخت",
     "token_transfer_fee_percent": "💎 کارمزد انتقال Token (%)",
-    "membership_requirement": "📢 حالت عضویت اجباری",
 }
+
 
 
 def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
@@ -121,14 +116,19 @@ def admin_product_detail_keyboard(product) -> InlineKeyboardMarkup:
 
 
 def admin_settings_keyboard(report_enabled: bool = True) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}")]
+    buttons = [
+        InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}")
         for key, label in EDITABLE_SETTINGS.items()
     ]
-    report_mark = "🟢 فعال" if report_enabled else "🔴 غیرفعال"
-    rows.append(
-        [InlineKeyboardButton(text=f"📢 گزارش سفارش در کانال: {report_mark}", callback_data="admin:setting:toggle_report")]
+    report_mark = "🟢" if report_enabled else "🔴"
+    buttons.append(
+        InlineKeyboardButton(
+            text=f"📢 گزارش سفارش {report_mark}",
+            callback_data="admin:setting:toggle_report",
+        )
     )
+
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

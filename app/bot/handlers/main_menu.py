@@ -37,19 +37,8 @@ async def _switch_to_home_keyboard(message: Message) -> None:
 
 async def _welcome_text() -> str:
     async with get_session() as session:
-        shop_name = await SettingsService(session).get("shop_name")
         welcome_text = await SettingsService(session).get("welcome_text") or ""
-
-    try:
-        welcome_text = welcome_text.format(shop_name=shop_name)
-    except (KeyError, IndexError):
-        pass
-
-    return (
-        f"🌐 <b>{shop_name}</b>\n\n{welcome_text}"
-        if welcome_text
-        else f"🌐 <b>{shop_name}</b>"
-    )
+    return welcome_text.replace("{shop_name}", "").strip() or "خوش آمدید."
 
 
 @router.message(F.text == SHOP)

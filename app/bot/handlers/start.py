@@ -24,25 +24,18 @@ async def handle_start(message: Message) -> None:
         )
 
         settings_service = SettingsService(session)
-        shop_name = await settings_service.get("shop_name")
         welcome_text = await settings_service.get("welcome_text") or ""
-        requirement = await settings_service.get("membership_requirement", "DISABLED")
         required_channels = await MembershipService(session).get_active_channels()
-
         is_member = True
-        if requirement in ("ALL", "BOT_USE_ONLY") and required_channels:
+        if required_channels:
             is_member = await MembershipService(session).is_user_member_of_all(
                 message.bot, message.from_user.id
             )
 
-    try:
-        welcome_text = welcome_text.format(shop_name=shop_name)
-    except (KeyError, IndexError):
-        pass
+    welcome_text = welcome_text.replace("{shop_name}", "").strip()
+    text = welcome_text or "خوش آمدید."
 
-    text = f"🌐 <b>{shop_name}</b>\n\n{welcome_text}" if welcome_text else f"🌐 <b>{shop_name}</b>"
-
-    if requirement in ("ALL", "BOT_USE_ONLY") and required_channels and not is_member:
+    if required_channels and not is_member:
         await message.answer(
             text + "\n\n📢 برای ادامه ابتدا در کانال‌های زیر عضو شوید:",
             reply_markup=membership_keyboard(required_channels),
