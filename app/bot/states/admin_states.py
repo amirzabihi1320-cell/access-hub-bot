@@ -15,3 +15,7 @@ class AdminStates(StatesGroup):
     WAITING_PRODUCT_MIN_QTY = State()
     WAITING_PRODUCT_MAX_QTY = State()
     WAITING_PRODUCT_BUTTON_COLUMNS = State()
+
+    WAITING_CHANNEL_TITLE = State()
+    WAITING_CHANNEL_USERNAME = State()
+    WAITING_CHANNEL_INVITE_LINK = State()

@@ -6,6 +6,7 @@ from app.config.settings import get_settings
 from app.database.base import get_session
 from app.models.user import User
 from app.services.user_service import UserService
+from app.services.settings_service import SettingsService
 from app.services.game_service import GameService, TokenService, GameError, InsufficientTokenError, GameClosedError, NotCreatorError
 
 router = Router(name="games")
@@ -15,6 +16,144 @@ def _name(user):
     if user.username:
         return f"@{user.username}"
     return user.first_name or str(user.telegram_id)
+
+def _transfer_amount(text: str) -> int | None:
+    raw = (text or "").strip().replace(",", "").replace("٬", "")
+    parts = raw.split()
+    if len(parts) != 2 or parts[0] != "انتقال" or not parts[1].isdigit():
+        return None
+    amount = int(parts[1])
+    return amount if amount > 0 else None
+
+
+@router.message(F.chat.type.in_({"group", "supergroup"}), F.text.startswith("انتقال "))
+async def handle_token_transfer_request(message: Message):
+    """انتقال Token با Reply: «انتقال 50»"""
+    if not message.reply_to_message or not message.reply_to_message.from_user:
+        await message.reply("❌ برای انتقال، روی پیام گیرنده Reply کنید و بنویسید: «انتقال 50»")
+        return
+    target = message.reply_to_message.from_user
+    if target.is_bot:
+        await message.reply("❌ نمی‌توانید به ربات‌ها Token منتقل کنید.")
+        return
+
+    amount = _transfer_amount(message.text or "")
+    if amount is None:
+        await message.reply("❌ فرمت صحیح: «انتقال 50»")
+        return
+    if target.id == message.from_user.id:
+        await message.reply("❌ نمی‌توانید به خودتان Token منتقل کنید.")
+        return
+
+    async with get_session() as session:
+        sender = await session.scalar(select(User).where(User.telegram_id == message.from_user.id))
+        recipient = await session.scalar(select(User).where(User.telegram_id == target.id))
+        fee_text = await SettingsService(session).get("token_transfer_fee_percent", "10")
+    if not sender:
+        await message.reply("❌ ابتدا ربات را با /start فعال کنید.")
+        return
+    if not recipient:
+        await message.reply("❌ این کاربر هنوز ربات را با /start فعال نکرده است.")
+        return
+
+    try:
+        fee_percent = float(fee_text or "10")
+        if not 0 <= fee_percent <= 100:
+            fee_percent = 10
+    except ValueError:
+        fee_percent = 10
+
+    fee = int(amount * fee_percent / 100)
+    total = amount + fee
+    if sender.token_balance < total:
+        await message.reply(
+            f"❌ موجودی کافی نیست.\n\n"
+            f"💎 انتقال: {amount:,}\n"
+            f"💰 کارمزد: {fee:,}\n"
+            f"📤 نیاز: {total:,}\n"
+            f"💳 موجودی: {sender.token_balance:,}"
+        )
+        return
+
+    name = _name(target)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ تأیید انتقال",
+                callback_data=f"token:confirm:{target.id}:{amount}",
+            ),
+            InlineKeyboardButton(text="❌ لغو", callback_data="token:cancel"),
+        ]
+    ])
+    await message.reply(
+        f"💸 <b>تأیید انتقال Token</b>\n\n"
+        f"👤 گیرنده: <b>{name}</b>\n"
+        f"💎 مبلغ انتقال: <b>{amount:,}</b> 🪙\n"
+        f"💰 کارمزد ({fee_percent:g}%): <b>{fee:,}</b> 🪙\n"
+        f"📤 کسر از موجودی شما: <b>{total:,}</b> 🪙\n"
+        f"💳 موجودی فعلی: <b>{sender.token_balance:,}</b> 🪙",
+        reply_markup=keyboard,
+    )
+
+
+@router.callback_query(F.data == "token:cancel")
+async def cancel_token_transfer(callback: CallbackQuery):
+    await callback.message.edit_text("❌ انتقال لغو شد.")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("token:confirm:"))
+async def confirm_token_transfer(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    if len(parts) != 4:
+        await callback.answer("❌ درخواست نامعتبر است.", show_alert=True)
+        return
+    try:
+        recipient_tg_id = int(parts[2])
+        amount = int(parts[3])
+    except ValueError:
+        await callback.answer("❌ درخواست نامعتبر است.", show_alert=True)
+        return
+
+    async with get_session() as session:
+        fee_text = await SettingsService(session).get("token_transfer_fee_percent", "10")
+        try:
+            fee_percent = float(fee_text or "10")
+        except ValueError:
+            fee_percent = 10
+        fee_percent = min(100, max(0, fee_percent))
+        try:
+            sender, recipient, fee, _ = await TokenService(session).transfer(
+                sender_telegram_id=callback.from_user.id,
+                recipient_telegram_id=recipient_tg_id,
+                amount=amount,
+                fee_percent=fee_percent,
+                reference_id=f"chat-transfer:{callback.message.message_id}:{callback.from_user.id}",
+            )
+            await session.commit()
+        except (InsufficientTokenError, GameError, ValueError) as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+
+    await callback.message.edit_text(
+        f"✅ <b>انتقال با موفقیت انجام شد.</b>\n\n"
+        f"👤 گیرنده: <b>{_name(recipient)}</b>\n"
+        f"💎 منتقل شد: <b>{amount:,}</b> 🪙\n"
+        f"💰 کارمزد: <b>{fee:,}</b> 🪙\n"
+        f"💳 موجودی جدید شما: <b>{sender.token_balance:,}</b> 🪙"
+    )
+    try:
+        await callback.bot.send_message(
+            recipient.telegram_id,
+            f"🎁 <b>دریافت Token</b>\n\n"
+            f"👤 از طرف: <b>{_name(sender)}</b>\n"
+            f"💎 مبلغ دریافتی: <b>{amount:,}</b> 🪙",
+        )
+    except Exception:
+        # گیرنده ممکن است ربات را بلاک کرده باشد؛ تراکنش انجام شده و نباید rollback شود.
+        pass
+    await callback.answer("انتقال انجام شد ✅")
+
 
 def _entry(text):
     raw = text.strip().lower().replace(",", "").replace("٬", "")

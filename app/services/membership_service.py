@@ -33,7 +33,10 @@ class MembershipService:
             return True
 
         for channel in channels:
-            chat_id = channel.username if channel.username.startswith("@") else f"@{channel.username}"
+            raw_chat_id = channel.username.strip()
+            chat_id = int(raw_chat_id) if raw_chat_id.lstrip("-").isdigit() else (
+                raw_chat_id if raw_chat_id.startswith("@") else f"@{raw_chat_id}"
+            )
             try:
                 member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
             except TelegramBadRequest:
@@ -53,6 +56,28 @@ class MembershipService:
             select(RequiredChannel).order_by(RequiredChannel.sort_order)
         )
         return list(result.scalars().all())
+
+    async def add_channel(
+        self,
+        title: str,
+        username: str,
+        invite_link: str | None = None,
+        sort_order: int = 0,
+    ) -> RequiredChannel:
+        username = username.strip()
+        if username and not username.startswith("@") and not username.lstrip("-").isdigit():
+            username = "@" + username
+        channel = RequiredChannel(
+            title=title.strip()[:128],
+            username=username[:64],
+            invite_link=(invite_link.strip()[:255] if invite_link and invite_link.strip() else None),
+            is_active=True,
+            sort_order=sort_order,
+        )
+        self.session.add(channel)
+        await self.session.commit()
+        await self.session.refresh(channel)
+        return channel
 
     async def toggle_channel(self, channel_id: int) -> RequiredChannel:
         result = await self.session.execute(

@@ -10,6 +10,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy import select
 
 from app.bot.keyboards.admin import (
@@ -34,6 +35,7 @@ from app.core.enums import DepositRequestStatus, OrderStatus
 from app.database.base import get_session
 from app.models.order import Order
 from app.models.product import Product
+from app.models.required_channel import RequiredChannel
 from app.models.user import User
 from app.services.category_service import CategoryService
 from app.services.deposit_service import DepositService
@@ -478,6 +480,106 @@ async def handle_admin_channels(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "admin:channel:add")
+async def handle_admin_channel_add_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    await state.set_state(AdminStates.WAITING_CHANNEL_TITLE)
+    await callback.message.edit_text(
+        "➕ <b>افزودن کانال اجباری</b>\n\n"
+        "1️⃣ نام نمایشی کانال را بفرستید.\n"
+        "مثال: <code>Access Hub</code>",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_CHANNEL_TITLE, F.text)
+async def handle_channel_title(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    title = message.text.strip()
+    if not title:
+        await message.answer("❌ نام کانال نمی‌تواند خالی باشد.")
+        return
+    await state.update_data(channel_title=title[:128])
+    await state.set_state(AdminStates.WAITING_CHANNEL_USERNAME)
+    await message.answer(
+        "2️⃣ یوزرنیم عمومی کانال را بفرستید، مثلاً <code>@AccessHubMarket</code>.\n"
+        "اگر کانال Private است، Chat ID آن را بفرستید (مثلاً <code>-1001234567890</code>)."
+    )
+
+
+@router.message(AdminStates.WAITING_CHANNEL_USERNAME, F.text)
+async def handle_channel_username(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    username = message.text.strip()
+    if not username:
+        await message.answer("❌ یوزرنیم/Chat ID نمی‌تواند خالی باشد.")
+        return
+    if not username.startswith("@") and not username.lstrip("-").isdigit():
+        username = "@" + username
+    try:
+        chat = await message.bot.get_chat(username if username.startswith("@") else int(username))
+        bot_member = await message.bot.get_chat_member(chat.id, message.bot.id)
+        if bot_member.status not in {"administrator", "creator"}:
+            await message.answer(
+                "❌ ربات ادمین این کانال نیست.\n"
+                "ابتدا ربات را در کانال Administrator کنید و دوباره تلاش کنید."
+            )
+            return
+    except TelegramBadRequest:
+        await message.answer(
+            "❌ کانال پیدا نشد یا ربات به آن دسترسی ندارد.\n"
+            "یوزرنیم/Chat ID را بررسی کنید و مطمئن شوید ربات ادمین کانال است."
+        )
+        return
+
+    async with get_session() as session:
+        exists = await session.scalar(
+            select(RequiredChannel).where(RequiredChannel.username == username)
+        )
+        if exists:
+            await state.clear()
+            await message.answer("⚠️ این کانال قبلاً ثبت شده است.", reply_markup=admin_back_keyboard())
+            return
+
+    await state.update_data(channel_username=username)
+    await state.set_state(AdminStates.WAITING_CHANNEL_INVITE_LINK)
+    await message.answer(
+        "3️⃣ لینک عضویت کانال را بفرستید.\n"
+        "برای کانال عمومی می‌توانید <code>-</code> بفرستید تا لینک خودکار ساخته شود."
+    )
+
+
+@router.message(AdminStates.WAITING_CHANNEL_INVITE_LINK, F.text)
+async def handle_channel_invite_link(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    data = await state.get_data()
+    invite = message.text.strip()
+    invite = None if invite == "-" else invite
+    if invite and not (invite.startswith("https://t.me/") or invite.startswith("http://t.me/")):
+        await message.answer("❌ لینک باید به شکل https://t.me/... باشد یا برای صرف‌نظر کردن «-» بفرستید.")
+        return
+
+    async with get_session() as session:
+        channel = await MembershipService(session).add_channel(
+            title=data["channel_title"],
+            username=data["channel_username"],
+            invite_link=invite,
+        )
+        channels = await MembershipService(session).list_all_channels()
+
+    await state.clear()
+    await message.answer(
+        f"✅ کانال «{channel.title}» با موفقیت اضافه شد.",
+        reply_markup=admin_channels_keyboard(channels),
+    )
+
+
 @router.callback_query(F.data.startswith("admin:channel:toggle:"))
 async def handle_admin_channel_toggle(callback: CallbackQuery) -> None:
     channel_id = int(callback.data.split(":")[3])
@@ -542,6 +644,27 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
         if not value.isdigit() or not (1 <= int(value) <= 3):
             await message.answer("❗️ فقط عدد ۱ یا ۲ یا ۳ را وارد کنید (تعداد دکمه در هر ردیف).")
             return
+
+    if key == "token_transfer_fee_percent":
+        try:
+            fee = float(value)
+        except ValueError:
+            await message.answer("❗️ کارمزد باید عددی بین ۰ تا ۱۰۰ باشد.")
+            return
+        if not 0 <= fee <= 100:
+            await message.answer("❗️ کارمزد باید بین ۰ تا ۱۰۰ درصد باشد.")
+            return
+
+    if key == "membership_requirement":
+        allowed = {"ALL", "PURCHASE_ONLY", "BOT_USE_ONLY", "DISABLED"}
+        if value.upper() not in allowed:
+            await message.answer(
+                "❗️ مقدار نامعتبر است. یکی از این‌ها را بفرستید:\n"
+                "<code>ALL</code>\n<code>BOT_USE_ONLY</code>\n"
+                "<code>PURCHASE_ONLY</code>\n<code>DISABLED</code>"
+            )
+            return
+        value = value.upper()
 
     async with get_session() as session:
         await SettingsService(session).set(key, value)

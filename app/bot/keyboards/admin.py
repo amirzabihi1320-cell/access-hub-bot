@@ -8,6 +8,8 @@ EDITABLE_SETTINGS = {
     "payment_description": "توضیحات پرداخت",
     "shop_buttons_per_row": "تعداد دکمه در هر ردیف فروشگاه (۱ تا ۳)",
     "game_chat_link": "🔗 لینک گپ بازی",
+    "token_transfer_fee_percent": "💎 کارمزد انتقال Token (%)",
+    "membership_requirement": "📢 حالت عضویت اجباری",
 }
 
 
@@ -136,8 +138,14 @@ def admin_channels_keyboard(channels) -> InlineKeyboardMarkup:
     for ch in channels:
         mark = "🟢" if ch.is_active else "🔴"
         rows.append(
-            [InlineKeyboardButton(text=f"{mark} {ch.title}", callback_data=f"admin:channel:toggle:{ch.id}")]
+            [
+                InlineKeyboardButton(
+                    text=f"{mark} {ch.title}",
+                    callback_data=f"admin:channel:toggle:{ch.id}",
+                )
+            ]
         )
+    rows.append([InlineKeyboardButton(text="➕ افزودن کانال", callback_data="admin:channel:add")])
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

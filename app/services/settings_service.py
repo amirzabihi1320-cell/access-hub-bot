@@ -26,6 +26,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "order_report_enabled": "true",
     "game_chat_id": "",
     "game_chat_link": "",
+    "token_transfer_fee_percent": "10",
 }
 
 

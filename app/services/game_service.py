@@ -67,6 +67,76 @@ class TokenService:
             raise InsufficientTokenError("موجودی Token شما برای ورود به این بازی کافی نیست.")
         return await self._record(user, type_, -amount, reference_id, description)
 
+    async def transfer(
+        self,
+        sender_telegram_id: int,
+        recipient_telegram_id: int,
+        amount: int,
+        fee_percent: float,
+        reference_id: str | None = None,
+    ):
+        """انتقال Token بین کاربران؛ کارمزد جداگانه از فرستنده کسر می‌شود."""
+        if amount <= 0:
+            raise ValueError("مبلغ انتقال باید بیشتر از صفر باشد.")
+        if sender_telegram_id == recipient_telegram_id:
+            raise GameError("❌ نمی‌توانید به خودتان Token منتقل کنید.")
+        if fee_percent < 0 or fee_percent > 100:
+            raise ValueError("درصد کارمزد نامعتبر است.")
+
+        # برای جلوگیری از deadlock در دو انتقال همزمان، قفل‌ها را با ترتیب ثابت user.id می‌گیریم.
+        users = (
+            await self.session.execute(
+                select(User)
+                .where(User.telegram_id.in_([sender_telegram_id, recipient_telegram_id]))
+                .order_by(User.id)
+                .with_for_update()
+            )
+        ).scalars().all()
+        by_tg = {u.telegram_id: u for u in users}
+        sender = by_tg.get(sender_telegram_id)
+        recipient = by_tg.get(recipient_telegram_id)
+        if not sender:
+            raise GameError("ابتدا /start را بزنید.")
+        if not recipient:
+            raise GameError("❌ گیرنده هنوز ربات را فعال نکرده است.")
+        if recipient.is_blocked:
+            raise GameError("❌ انتقال به این کاربر امکان‌پذیر نیست.")
+
+        fee = int(amount * fee_percent / 100)
+        total_debit = amount + fee
+        if sender.token_balance < total_debit:
+            raise InsufficientTokenError(
+                f"❌ موجودی کافی نیست.\n"
+                f"مبلغ انتقال: {amount:,} 🪙\n"
+                f"کارمزد: {fee:,} 🪙\n"
+                f"نیاز: {total_debit:,} 🪙"
+            )
+
+        ref = reference_id or f"transfer:{sender.id}:{recipient.id}:{utcnow().timestamp()}"
+        await self._record(
+            sender,
+            "transfer_out",
+            -amount,
+            ref,
+            f"انتقال {amount:,} Token به {recipient.telegram_id}",
+        )
+        if fee:
+            await self._record(
+                sender,
+                "transfer_fee",
+                -fee,
+                ref,
+                f"کارمزد انتقال {amount:,} Token",
+            )
+        await self._record(
+            recipient,
+            "transfer_in",
+            amount,
+            ref,
+            f"دریافت {amount:,} Token از {sender.telegram_id}",
+        )
+        return sender, recipient, fee, ref
+
     async def admin_adjust(self, telegram_id: int, amount: int, admin_id: int, reference_id: str | None = None):
         user = await self.session.scalar(select(User).where(User.telegram_id == telegram_id).with_for_update())
         if not user: raise GameError("کاربر پیدا نشد.")
