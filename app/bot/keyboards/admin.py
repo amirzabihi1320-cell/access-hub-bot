@@ -23,6 +23,9 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📢 عضویت اجباری", callback_data="admin:channels"),
                 InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings"),
             ],
+            [
+                InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments"),
+            ],
         ]
     )
 

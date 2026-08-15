@@ -24,6 +24,9 @@ from app.services.settings_service import SettingsService
 from app.utils.message_manager import MessageManager
 
 router = Router(name="main_menu")
+# فقط داخل پیوی کار کند؛ وگرنه کیبورد ثابت فروشگاه برای کل گروه ست می‌شود
+# و همه‌ی اعضا می‌توانند دکمه‌های خرید/کیف‌پول همدیگر را بزنند.
+router.message.filter(F.chat.type == "private")
 settings = get_settings()
 
 

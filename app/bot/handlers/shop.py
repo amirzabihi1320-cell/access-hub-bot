@@ -17,6 +17,10 @@ from app.services.wallet_service import InsufficientBalanceError
 from app.utils.message_manager import MessageManager
 
 router = Router(name="shop")
+# ورود به فروشگاه با تایپ متن فقط در پیوی معنا دارد (دکمه‌های شیشه‌ای زیر
+# پیام هرجایی که فرستاده شوند قابل کلیک‌اند، ولی ورودی متنیِ «تعداد» باید
+# فقط در چت خصوصی خودِ کاربر پردازش شود).
+router.message.filter(F.chat.type == "private")
 settings = get_settings()
 
 # قفل درون‌حافظه‌ای برای جلوگیری از دوبار کلیک روی پرداخت قبل از تمام‌شدن

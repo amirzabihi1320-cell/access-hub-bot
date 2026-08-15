@@ -24,6 +24,7 @@ from app.services.user_service import UserService
 from app.services.wallet_service import WalletService
 
 router = Router(name="wallet")
+router.message.filter(F.chat.type == "private")
 settings = get_settings()
 
 

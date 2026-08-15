@@ -46,6 +46,8 @@ from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 
 router = Router(name="admin")
+# پنل ادمین فقط باید در پیوی خودِ ادمین با ربات کار کند.
+router.message.filter(F.chat.type == "private")
 settings = get_settings()
 
 

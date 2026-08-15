@@ -25,6 +25,12 @@ class MaintenanceMiddleware(BaseMiddleware):
         if user and user.id in settings.admin_ids:
             return await handler(event, data)
 
+        # مثل عضویت اجباری: این پیام فقط برای چت خصوصی کاربر با ربات معناداره.
+        message_obj = getattr(event, "message", None) or getattr(event, "callback_query", None)
+        chat = getattr(message_obj, "chat", None) or getattr(getattr(message_obj, "message", None), "chat", None)
+        if chat and chat.type != "private":
+            return await handler(event, data)
+
         async with get_session() as session:
             is_maintenance = await SettingsService(session).is_maintenance_mode()
 

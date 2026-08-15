@@ -24,6 +24,7 @@ class UserService:
         username: str | None,
         first_name: str | None,
         last_name: str | None,
+        referral_code: str | None = None,
     ) -> User:
         result = await self.session.execute(
             select(User).options(selectinload(User.wallet)).where(User.telegram_id == telegram_id)
@@ -38,12 +39,24 @@ class UserService:
             await self.session.commit()
             return user
 
+        referred_by_id: int | None = None
+        if referral_code:
+            referrer_result = await self.session.execute(
+                select(User).where(User.referral_code == referral_code)
+            )
+            referrer = referrer_result.scalar_one_or_none()
+            # کاربر جدید هنوز رکورد ندارد، پس مقایسه با telegram_id او بی‌معناست؛
+            # فقط باید مطمئن شویم معرف با خودِ کاربرِ در حال ساخت یکی نیست.
+            if referrer and referrer.telegram_id != telegram_id:
+                referred_by_id = referrer.id
+
         user = User(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
             last_name=last_name,
             referral_code=_generate_referral_code(),
+            referred_by=referred_by_id,
         )
         self.session.add(user)
         await self.session.flush()  # برای گرفتن user.id قبل از commit

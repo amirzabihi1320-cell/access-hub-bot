@@ -28,6 +28,14 @@ class MembershipMiddleware(BaseMiddleware):
         message: Message | None = event.message
         callback: CallbackQuery | None = event.callback_query
 
+        # عضویت اجباری فقط برای استفاده‌ی خصوصی کاربر از فروشگاه معناداره؛
+        # اگه این چک روی چت گروهی هم اجرا بشه، با هر پیام معمولیِ هر عضوِ
+        # گروه (که اصلاً ربطی به ربات نداره) یه پیام «عضو کانال شوید» به
+        # کل گروه اسپم می‌شه. برای همین در گروه/سوپرگروه کاملاً رد می‌شیم.
+        chat = (message.chat if message else None) or (callback.message.chat if callback and callback.message else None)
+        if chat and chat.type != "private":
+            return await handler(event, data)
+
         # دستور /start همیشه آزاده تا کاربر بتونه ثبت‌نام کنه
         if message and message.text and message.text.startswith("/start"):
             return await handler(event, data)

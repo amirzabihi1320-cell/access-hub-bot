@@ -4,6 +4,7 @@ SHOP = "🛍 فروشگاه"
 WALLET = "💰 کیف پول"
 ORDERS = "📦 سفارش‌های من"
 DISCOUNTS = "🎁 تخفیف‌ها"
+TOURNAMENTS = "🏆 تورنومنت‌ها"
 ACCOUNT = "👤 حساب کاربری"
 SUPPORT = "🎧 پشتیبانی"
 CHANNEL = "📢 کانال ما"
@@ -15,8 +16,8 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=SHOP), KeyboardButton(text=WALLET)],
             [KeyboardButton(text=ORDERS), KeyboardButton(text=DISCOUNTS)],
-            [KeyboardButton(text=ACCOUNT), KeyboardButton(text=SUPPORT)],
-            [KeyboardButton(text=CHANNEL)],
+            [KeyboardButton(text=TOURNAMENTS), KeyboardButton(text=ACCOUNT)],
+            [KeyboardButton(text=SUPPORT), KeyboardButton(text=CHANNEL)],
         ],
         resize_keyboard=True,
     )

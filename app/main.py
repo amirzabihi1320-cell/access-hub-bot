@@ -14,6 +14,7 @@ from app.bot.handlers import membership as membership_handler
 from app.bot.handlers import orders as orders_handler
 from app.bot.handlers import shop as shop_handler
 from app.bot.handlers import start as start_handler
+from app.bot.handlers import tournament as tournament_handler
 from app.bot.handlers import wallet as wallet_handler
 from app.bot.handlers import games as games_handler
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
@@ -44,6 +45,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(wallet_handler.router)
     dp.include_router(games_handler.router)
     dp.include_router(orders_handler.router)
+    dp.include_router(tournament_handler.router)
     dp.include_router(admin_handler.router)
 
     return dp

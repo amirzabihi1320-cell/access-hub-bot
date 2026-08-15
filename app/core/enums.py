@@ -24,6 +24,8 @@ class WalletTransactionType(str, enum.Enum):
     BONUS = "BONUS"
     ADMIN_ADJUSTMENT = "ADMIN_ADJUSTMENT"
     WITHDRAWAL = "WITHDRAWAL"
+    TOURNAMENT_ENTRY = "TOURNAMENT_ENTRY"
+    TOURNAMENT_PRIZE = "TOURNAMENT_PRIZE"
 
 
 class DepositRequestStatus(str, enum.Enum):
