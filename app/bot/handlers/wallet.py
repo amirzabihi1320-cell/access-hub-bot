@@ -246,22 +246,28 @@ async def handle_deposit_amount(
     )
 
     if deposit_type == "TOKEN":
-        token_amount = value
-        text = (
-            "🪙 <b>شارژ Access Token</b>\n\n"
-            f"تعداد Token:\n<b>{token_amount:,} Token</b>\n\n"
-            f"مبلغ قابل پرداخت:\n<b>{amount:,} تومان</b>\n\n"
-            "💳 <b>اطلاعات پرداخت</b>\n\n"
-            f"{payment_info}\n"
+        # این مسیر مستقیماً روی صف Access Token/Game Economy (game_service.py)
+        # می‌نشیند که قبلاً به‌صراحت گفته شد قابل توسعه/تکمیل نیست؛ برای همین
+        # عمداً کرش نمی‌کند ولی درخواست را هم پردازش نمی‌کند.
+        await message.answer(
+            "❗️ شارژ Access Token در حال حاضر غیرفعال است.\n"
+            "برای شارژ کیف پول از «💳 شارژ ریالی» استفاده کنید."
         )
-    else:
-        text = (
-            "💳 <b>شارژ ریالی</b>\n\n"
-            f"مبلغ:\n<b>{amount:,} تومان</b>\n\n"
-            "💳 <b>اطلاعات پرداخت</b>\n\n"
-            f"{payment_info}\n"
-        )
+        await state.clear()
+        return
 
+    async with get_session() as session:
+        payment_info = await SettingsService(session).get("payment_info") or "اطلاعات پرداخت ثبت نشده است."
+
+    await state.update_data(amount=value)
+    await state.set_state(DepositStates.WAITING_RECEIPT)
+
+    text = (
+        "💳 <b>شارژ ریالی</b>\n\n"
+        f"مبلغ:\n<b>{value:,} تومان</b>\n\n"
+        "💳 <b>اطلاعات پرداخت</b>\n\n"
+        f"{payment_info}\n"
+    )
     text += (
         "\n📤 بعد از کارت‌به‌کارت، "
         "عکس رسید پرداخت را همینجا ارسال کنید."
