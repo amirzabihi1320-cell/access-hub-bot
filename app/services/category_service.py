@@ -33,8 +33,21 @@ class CategoryService:
         await self.session.commit()
         return category
 
-    async def create(self, name: str, icon: str | None = None) -> Category:
-        category = Category(name=name, icon=icon, status=True)
+    async def create(
+        self,
+        name: str,
+        icon: str | None = None,
+        button_columns: int = 1,
+    ) -> Category:
+        if button_columns not in (1, 2):
+            raise ValueError("تعداد ستون دکمه باید ۱ یا ۲ باشد.")
+
+        category = Category(
+            name=name,
+            icon=icon,
+            status=True,
+            button_columns=button_columns,
+        )
         self.session.add(category)
         await self.session.commit()
         await self.session.refresh(category)

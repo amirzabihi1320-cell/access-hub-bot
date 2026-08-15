@@ -9,3 +9,7 @@ dist/
 build/
 .coverage
 htmlcov/
+access_hub.db
+access_hub_backup_before_migration.db
+*.db
+*.bak

@@ -48,7 +48,16 @@ class ProductService:
         await self.session.commit()
         return product
 
-    async def create_fixed(self, category_id: int, name: str, price: int) -> Product:
+    async def create_fixed(
+        self,
+        category_id: int,
+        name: str,
+        price: int,
+        button_columns: int = 1,
+    ) -> Product:
+        if button_columns not in (1, 2):
+            raise ValueError("تعداد ستون دکمه باید ۱ یا ۲ باشد.")
+
         product = Product(
             category_id=category_id,
             name=name,
@@ -56,6 +65,7 @@ class ProductService:
             product_type="FIXED",
             fixed_price=price,
             status=True,
+            button_columns=button_columns,
         )
         self.session.add(product)
         await self.session.flush()
@@ -89,8 +99,17 @@ class ProductService:
         await self.session.commit()
 
     async def create_variable(
-        self, category_id: int, name: str, unit_price: int, min_quantity: int, max_quantity: int
+        self,
+        category_id: int,
+        name: str,
+        unit_price: int,
+        min_quantity: int,
+        max_quantity: int,
+        button_columns: int = 1,
     ) -> Product:
+        if button_columns not in (1, 2):
+            raise ValueError("تعداد ستون دکمه باید ۱ یا ۲ باشد.")
+
         product = Product(
             category_id=category_id,
             name=name,
@@ -100,6 +119,7 @@ class ProductService:
             min_quantity=min_quantity,
             max_quantity=max_quantity,
             status=True,
+            button_columns=button_columns,
         )
         self.session.add(product)
         await self.session.flush()

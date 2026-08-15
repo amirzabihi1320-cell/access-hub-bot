@@ -7,6 +7,7 @@ EDITABLE_SETTINGS = {
     "card_holder_name": "به نام (صاحب کارت)",
     "payment_description": "توضیحات پرداخت",
     "shop_buttons_per_row": "تعداد دکمه در هر ردیف فروشگاه (۱ تا ۳)",
+    "game_chat_link": "🔗 لینک گپ بازی",
 }
 
 
@@ -139,3 +140,28 @@ def admin_channels_keyboard(channels) -> InlineKeyboardMarkup:
         )
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def button_columns_keyboard(back_callback: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📏 تمام‌عرض",
+                    callback_data="layout:columns:1",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="↔️ دو دکمه کنار هم",
+                    callback_data="layout:columns:2",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔙 بازگشت",
+                    callback_data=back_callback,
+                )
+            ],
+        ]
+    )

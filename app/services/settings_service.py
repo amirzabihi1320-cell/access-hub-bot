@@ -24,7 +24,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "shop_buttons_per_row": "1",
     # ارسال گزارش خلاصه‌ی سفارش موفق به کانال گزارش‌ها (بخش ۳۳ سند).
     "order_report_enabled": "true",
+    "game_chat_id": "",
+    "game_chat_link": "",
 }
+
 
 
 class SettingsService:

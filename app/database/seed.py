@@ -1,8 +1,17 @@
 """
-اگه جدول categories خالی باشه، یه دسته‌بندی و دو محصول نمونه می‌سازه
-تا بشه فروشگاه رو قبل از آماده شدن پنل ادمین (فاز ۵) تست کرد.
-این فایل موقتیه و بعد از فاز ۵ (که افزودن محصول از تلگرام ممکن می‌شه) حذف می‌شود.
+Seed اولیه فروشگاه.
+
+اگر جدول categories خالی باشد:
+- یک دسته‌بندی می‌سازد.
+- محصول Telegram Premium را می‌سازد.
+- محصول Access Token را می‌سازد.
+
+Access Token:
+- هر 500 Token = 20,000 تومان
+- حداقل خرید = 500 Token
+- حداکثر خرید = ندارد
 """
+
 import logging
 
 from sqlalchemy import select
@@ -17,8 +26,9 @@ logger = logging.getLogger("access_hub")
 async def seed_initial_data() -> None:
     async with get_session() as session:
         result = await session.execute(select(Category))
+
         if result.scalars().first():
-            return  # قبلاً seed شده، کاری نکن
+            return
 
         category = Category(
             name="🤖 هوش مصنوعی",
@@ -27,6 +37,7 @@ async def seed_initial_data() -> None:
             status=True,
             sort_order=1,
         )
+
         session.add(category)
         await session.flush()
 
@@ -40,19 +51,28 @@ async def seed_initial_data() -> None:
             status=True,
             sort_order=1,
         )
-        product_variable = Product(
+
+        product_token = Product(
             category_id=category.id,
-            name="Telegram Stars",
-            slug="tg-stars",
-            description="خرید استارز تلگرام به هر تعداد دلخواه",
+            name="🪙 Access Token",
+            slug="access-token",
+            description=(
+                "خرید Access Token برای استفاده در بخش بازی. "
+                "هر ۵۰۰ توکن ۲۰٬۰۰۰ تومان. "
+                "حداقل خرید ۵۰۰ توکن و بدون سقف خرید."
+            ),
             product_type="VARIABLE_QUANTITY",
-            unit_price=1_200,
-            min_quantity=50,
-            max_quantity=10_000,
+            unit_price=40,
+            min_quantity=500,
+            max_quantity=None,
             status=True,
             sort_order=2,
         )
-        session.add_all([product_fixed, product_variable])
+
+        session.add_all([product_fixed, product_token])
         await session.commit()
 
-        logger.info("Seed data created: 1 category, 2 products.")
+        logger.info(
+            "Seed data created: 1 category, 2 products "
+            "(Telegram Premium + Access Token)."
+        )

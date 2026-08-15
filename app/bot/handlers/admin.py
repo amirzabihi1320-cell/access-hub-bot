@@ -25,6 +25,7 @@ from app.bot.keyboards.admin import (
     admin_product_type_pick_keyboard,
     admin_products_keyboard,
     admin_settings_keyboard,
+    button_columns_keyboard,
 )
 from app.bot.keyboards.wallet import admin_deposit_decision_keyboard
 from app.bot.states.admin_states import AdminStates
@@ -221,6 +222,8 @@ async def handle_admin_product_add_category(callback: CallbackQuery, state: FSMC
 @router.callback_query(F.data.startswith("admin:product:add:type:"))
 async def handle_admin_product_add_type(callback: CallbackQuery, state: FSMContext) -> None:
     product_type = callback.data.split(":", 4)[4]
+    await state.update_data(product_type=product_type)
+
     if product_type == "FIXED":
         await state.set_state(AdminStates.WAITING_PRODUCT_FIXED_PRICE)
         await callback.message.edit_text("💰 قیمت را به تومان وارد کنید:")
@@ -246,11 +249,13 @@ async def handle_admin_product_fixed_price(message: Message, state: FSMContext) 
         await message.answer("❗️ یک عدد صحیح و مثبت وارد کنید.")
         return
 
-    data = await state.get_data()
-    async with get_session() as session:
-        product = await ProductService(session).create_fixed(data["category_id"], data["product_name"], price)
-    await state.clear()
-    await message.answer(f"✅ محصول «{product.name}» با قیمت {price:,} تومان ساخته شد.")
+    await state.update_data(fixed_price=price)
+    await state.set_state(AdminStates.WAITING_PRODUCT_BUTTON_COLUMNS)
+
+    await message.answer(
+        "📐 نحوه نمایش دکمه این محصول را انتخاب کنید:",
+        reply_markup=button_columns_keyboard("admin:products"),
+    )
 
 
 @router.message(AdminStates.WAITING_PRODUCT_UNIT_PRICE, F.text)
@@ -289,14 +294,12 @@ async def handle_admin_product_max_qty(message: Message, state: FSMContext) -> N
         await message.answer("❗️ باید عددی صحیح و بزرگ‌تر یا مساوی حداقل باشد.")
         return
 
-    async with get_session() as session:
-        product = await ProductService(session).create_variable(
-            data["category_id"], data["product_name"], data["unit_price"], data["min_qty"], max_qty
-        )
-    await state.clear()
+    await state.update_data(max_qty=max_qty)
+    await state.set_state(AdminStates.WAITING_PRODUCT_BUTTON_COLUMNS)
+
     await message.answer(
-        f"✅ محصول «{product.name}» ساخته شد.\nقیمت واحد: {data['unit_price']:,} تومان\n"
-        f"محدوده: {data['min_qty']} تا {max_qty}"
+        "📐 نحوه نمایش دکمه این محصول را انتخاب کنید:",
+        reply_markup=button_columns_keyboard("admin:products"),
     )
 
 
@@ -345,12 +348,87 @@ async def handle_admin_category_add_name(message: Message, state: FSMContext) ->
 async def handle_admin_category_add_icon(message: Message, state: FSMContext) -> None:
     if not _is_admin(message.from_user.id):
         return
-    data = await state.get_data()
     icon = None if message.text.strip() == "-" else message.text.strip()
-    async with get_session() as session:
-        category = await CategoryService(session).create(data["category_name"], icon)
-    await state.clear()
-    await message.answer(f"✅ دسته‌بندی «{category.name}» ساخته شد.")
+
+    await state.update_data(category_icon=icon)
+    await state.set_state(AdminStates.WAITING_CATEGORY_BUTTON_COLUMNS)
+
+    await message.answer(
+        "📐 نحوه نمایش دکمه این دسته‌بندی را انتخاب کنید:",
+        reply_markup=button_columns_keyboard("admin:categories"),
+    )
+
+
+@router.callback_query(F.data.startswith("layout:columns:"))
+async def handle_layout_columns(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+
+    columns = int(callback.data.split(":")[2])
+
+    if columns not in (1, 2):
+        await callback.answer("❌ مقدار نامعتبر است.", show_alert=True)
+        return
+
+    current_state = await state.get_state()
+
+    if current_state == AdminStates.WAITING_CATEGORY_BUTTON_COLUMNS.state:
+        data = await state.get_data()
+
+        async with get_session() as session:
+            category = await CategoryService(session).create(
+                data["category_name"],
+                data.get("category_icon"),
+                columns,
+            )
+
+        await state.clear()
+
+        label = "تمام‌عرض" if columns == 1 else "دو ستونه"
+
+        await callback.message.edit_text(
+            f"✅ دسته‌بندی «{category.name}» ساخته شد.\n"
+            f"📐 نمایش دکمه: {label}"
+        )
+        await callback.answer("ذخیره شد ✅")
+        return
+
+    if current_state == AdminStates.WAITING_PRODUCT_BUTTON_COLUMNS.state:
+        data = await state.get_data()
+
+        async with get_session() as session:
+            product_service = ProductService(session)
+
+            if data["product_type"] == "FIXED":
+                product = await product_service.create_fixed(
+                    data["category_id"],
+                    data["product_name"],
+                    data["fixed_price"],
+                    columns,
+                )
+            else:
+                product = await product_service.create_variable(
+                    data["category_id"],
+                    data["product_name"],
+                    data["unit_price"],
+                    data["min_qty"],
+                    data["max_qty"],
+                    columns,
+                )
+
+        await state.clear()
+
+        label = "تمام‌عرض" if columns == 1 else "دو ستونه"
+
+        await callback.message.edit_text(
+            f"✅ محصول «{product.name}» ساخته شد.\n"
+            f"📐 نمایش دکمه: {label}"
+        )
+        await callback.answer("ذخیره شد ✅")
+        return
+
+    await callback.answer("این انتخاب دیگر فعال نیست.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin:category:del:"))

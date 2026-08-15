@@ -17,6 +17,11 @@ class Category(Base):
     status: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
+    # تعداد دکمه در هر ردیف:
+    # 1 = تمام‌عرض
+    # 2 = دو دکمه کنار هم
+    button_columns: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

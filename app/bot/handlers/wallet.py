@@ -1,15 +1,3 @@
-"""
-فاز ۳: کیف پول کامل + Ledger + شارژ دستی + تأیید/رد ادمین.
-
-جریان شارژ:
-  کاربر مبلغ را می‌فرستد → اطلاعات پرداخت (شماره کارت و ...) نمایش داده
-  می‌شود → کاربر رسید را به‌صورت عکس می‌فرستد → یک DepositRequest ساخته
-  می‌شود و برای همه‌ی ادمین‌ها (ADMIN_IDS) ارسال می‌شود → ادمین تأیید/رد
-  می‌کند → در صورت تأیید موجودی از طریق WalletService افزایش می‌یابد.
-
-طبق اصل ۹ و ۵۸ سند: تأیید دوباره یک درخواست غیرممکن است (بررسی status
-داخل DepositService با قفل ردیف)، و موجودی هرگز بدون Ledger تغییر نمی‌کند.
-"""
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
@@ -26,7 +14,11 @@ from app.config.settings import get_settings
 from app.core.enums import WalletTransactionType
 from app.database.base import get_session
 from app.models.user import User
-from app.services.deposit_service import DepositAlreadyDecidedError, DepositService
+from app.services.deposit_service import (
+    DepositAlreadyDecidedError,
+    DepositService,
+)
+from app.services.game_service import TokenService
 from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.services.wallet_service import WalletService
@@ -34,8 +26,9 @@ from app.services.wallet_service import WalletService
 router = Router(name="wallet")
 settings = get_settings()
 
+
 TX_LABELS = {
-    WalletTransactionType.DEPOSIT.value: "➕ شارژ",
+    WalletTransactionType.DEPOSIT.value: "➕ شارژ ریالی",
     WalletTransactionType.PURCHASE.value: "🛒 خرید",
     WalletTransactionType.REFUND.value: "↩️ استرداد",
     WalletTransactionType.BONUS.value: "🎁 پاداش",
@@ -50,240 +43,712 @@ def _is_admin(telegram_id: int) -> bool:
 
 async def _get_user(session: AsyncSession, tg_user) -> User:
     return await UserService(session).get_or_create(
-        tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name
+        tg_user.id,
+        tg_user.username,
+        tg_user.first_name,
+        tg_user.last_name,
     )
 
 
-async def build_wallet_view(session: AsyncSession, tg_user) -> tuple[str, InlineKeyboardMarkup]:
+async def build_wallet_view(
+    session: AsyncSession,
+    tg_user,
+) -> tuple[str, InlineKeyboardMarkup]:
+
     user = await _get_user(session, tg_user)
+
     text = (
         "💰 <b>کیف پول من</b>\n\n"
-        f"موجودی فعلی:\n<b>{user.wallet.balance:,} تومان</b>"
+        f"💳 موجودی ریالی:\n"
+        f"<b>{user.wallet.balance:,} تومان</b>\n\n"
+        f"🪙 موجودی Access Token:\n"
+        f"<b>{user.token_balance:,} Token</b>"
     )
+
     return text, wallet_menu_keyboard()
 
 
-# ---------- نمایش کیف پول ----------
+# =========================================================
+# نمایش کیف پول
+# =========================================================
 
 
 @router.callback_query(F.data == "wallet:menu")
-async def handle_wallet_menu(callback: CallbackQuery, state: FSMContext) -> None:
+async def handle_wallet_menu(
+    callback: CallbackQuery,
+    state: FSMContext,
+) -> None:
+
     await state.clear()
+
     async with get_session() as session:
-        text, keyboard = await build_wallet_view(session, callback.from_user)
-    await callback.message.edit_text(text, reply_markup=keyboard)
+        text, keyboard = await build_wallet_view(
+            session,
+            callback.from_user,
+        )
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=keyboard,
+    )
+
     await callback.answer()
 
 
 @router.callback_query(F.data == "wallet:history")
-async def handle_wallet_history(callback: CallbackQuery) -> None:
+async def handle_wallet_history(
+    callback: CallbackQuery,
+) -> None:
+
     async with get_session() as session:
-        user = await _get_user(session, callback.from_user)
-        transactions = await WalletService(session).list_transactions(user.id, limit=10)
+        user = await _get_user(
+            session,
+            callback.from_user,
+        )
+
+        transactions = await WalletService(
+            session
+        ).list_transactions(
+            user.id,
+            limit=10,
+        )
 
     if not transactions:
-        text = "📜 <b>تاریخچه تراکنش‌ها</b>\n\nهنوز تراکنشی ثبت نشده."
+        text = (
+            "📜 <b>تاریخچه تراکنش</b>\n\n"
+            "هنوز تراکنشی ثبت نشده."
+        )
     else:
         lines = ["📜 <b>۱۰ تراکنش اخیر</b>\n"]
+
         for tx in transactions:
-            label = TX_LABELS.get(tx.type, tx.type)
+            label = TX_LABELS.get(
+                tx.type,
+                tx.type,
+            )
+
             sign = "+" if tx.amount >= 0 else ""
-            lines.append(f"{label}: {sign}{tx.amount:,} تومان → مانده: {tx.balance_after:,} تومان")
+
+            lines.append(
+                f"{label}: "
+                f"{sign}{tx.amount:,} تومان\n"
+                f"مانده: {tx.balance_after:,} تومان"
+            )
+
         text = "\n".join(lines)
 
-    await callback.message.edit_text(text, reply_markup=wallet_back_keyboard())
+    await callback.message.edit_text(
+        text,
+        reply_markup=wallet_back_keyboard(),
+    )
+
     await callback.answer()
 
 
-# ---------- شارژ دستی ----------
+# =========================================================
+# شروع شارژ ریالی
+# =========================================================
 
 
-@router.callback_query(F.data == "wallet:deposit:start")
-async def handle_deposit_start(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(DepositStates.WAITING_AMOUNT)
+@router.callback_query(F.data == "wallet:deposit:rial")
+async def handle_rial_deposit_start(
+    callback: CallbackQuery,
+    state: FSMContext,
+) -> None:
+
+    await state.update_data(
+        deposit_type="RIAL"
+    )
+
+    await state.set_state(
+        DepositStates.WAITING_AMOUNT
+    )
+
     await callback.message.edit_text(
-        "➕ <b>شارژ کیف پول</b>\n\nمبلغ مورد نظر را به تومان وارد کنید (فقط عدد):\n\nمثال: <code>500000</code>",
+        "💳 <b>شارژ ریالی</b>\n\n"
+        "مبلغ مورد نظر را به تومان وارد کنید.\n\n"
+        "مثال:\n"
+        "<code>500000</code>",
         reply_markup=deposit_cancel_keyboard(),
     )
+
     await callback.answer()
 
 
-@router.message(DepositStates.WAITING_AMOUNT, F.text)
-async def handle_deposit_amount(message: Message, state: FSMContext) -> None:
-    raw = message.text.strip().replace(",", "").replace("٬", "")
+# =========================================================
+# شروع شارژ توکن
+# =========================================================
+
+
+@router.callback_query(F.data == "wallet:deposit:token")
+async def handle_token_deposit_start(
+    callback: CallbackQuery,
+    state: FSMContext,
+) -> None:
+
+    await state.update_data(
+        deposit_type="TOKEN"
+    )
+
+    await state.set_state(
+        DepositStates.WAITING_AMOUNT
+    )
+
+    await callback.message.edit_text(
+        "🪙 <b>شارژ Access Token</b>\n\n"
+        "تعداد Token مورد نظر را وارد کنید.\n\n"
+        "💰 هر 500 Token = 20,000 تومان\n"
+        "📌 حداقل خرید: 500 Token\n"
+        "♾ حداکثر خرید: ندارد\n\n"
+        "مثال:\n"
+        "<code>1000</code>",
+        reply_markup=deposit_cancel_keyboard(),
+    )
+
+    await callback.answer()
+
+
+# =========================================================
+# دریافت مبلغ / تعداد Token
+# =========================================================
+
+
+@router.message(
+    DepositStates.WAITING_AMOUNT,
+    F.text,
+)
+async def handle_deposit_amount(
+    message: Message,
+    state: FSMContext,
+) -> None:
+
+    raw = (
+        message.text
+        .strip()
+        .replace(",", "")
+        .replace("٬", "")
+        .replace(" ", "")
+    )
+
     if not raw.isdigit() or int(raw) <= 0:
-        await message.answer("❗️ لطفاً فقط یک عدد صحیح و مثبت وارد کنید. مثال: 500000")
+        await message.answer(
+            "❗️ لطفاً فقط یک عدد صحیح و مثبت وارد کنید."
+        )
         return
 
-    amount = int(raw)
-    await state.update_data(amount=amount)
-    await state.set_state(DepositStates.WAITING_RECEIPT)
+    value = int(raw)
+
+    data = await state.get_data()
+    deposit_type = data.get(
+        "deposit_type",
+        "RIAL",
+    )
+
+    if deposit_type == "TOKEN":
+
+        if value < 500:
+            await message.answer(
+                "❌ حداقل خرید 500 Token است."
+            )
+            return
+
+        # هر 500 توکن = 20,000 تومان
+        amount = (value * 20_000) // 500
+
+        # قیمت باید دقیقاً بر اساس واحد 500 Token باشد
+        if value % 500 != 0:
+            await message.answer(
+                "❌ تعداد Token باید مضربی از 500 باشد.\n\n"
+                "مثال: 500، 1000، 1500، 2000"
+            )
+            return
+
+        await state.update_data(
+            amount=amount,
+            token_amount=value,
+        )
+
+    else:
+
+        amount = value
+
+        await state.update_data(
+            amount=amount,
+            token_amount=None,
+        )
+
+    await state.set_state(
+        DepositStates.WAITING_RECEIPT
+    )
 
     async with get_session() as session:
+
         settings_service = SettingsService(session)
-        card_number = await settings_service.get("card_number") or "ثبت نشده"
-        card_holder = await settings_service.get("card_holder_name") or "ثبت نشده"
-        description = await settings_service.get("payment_description") or ""
 
-    text = (
-        "💳 <b>اطلاعات پرداخت</b>\n\n"
-        f"مبلغ:\n<b>{amount:,} تومان</b>\n\n"
-        f"شماره کارت:\n<code>{card_number}</code>\n\n"
-        f"به نام:\n{card_holder}\n"
-    )
+        card_number = (
+            await settings_service.get("card_number")
+            or "ثبت نشده"
+        )
+
+        card_holder = (
+            await settings_service.get("card_holder_name")
+            or "ثبت نشده"
+        )
+
+        description = (
+            await settings_service.get("payment_description")
+            or ""
+        )
+
+    if deposit_type == "TOKEN":
+
+        token_amount = data.get("token_amount")
+
+        # چون state قبل از اینجا update شده،
+        # مقدار جدید را از value استفاده می‌کنیم.
+        token_amount = value
+
+        text = (
+            "🪙 <b>شارژ Access Token</b>\n\n"
+            f"تعداد Token:\n"
+            f"<b>{token_amount:,} Token</b>\n\n"
+            f"مبلغ قابل پرداخت:\n"
+            f"<b>{amount:,} تومان</b>\n\n"
+            "💳 <b>اطلاعات کارت</b>\n\n"
+            f"شماره کارت:\n"
+            f"<code>{card_number}</code>\n\n"
+            f"به نام:\n"
+            f"{card_holder}\n"
+        )
+
+    else:
+
+        text = (
+            "💳 <b>شارژ ریالی</b>\n\n"
+            f"مبلغ:\n"
+            f"<b>{amount:,} تومان</b>\n\n"
+            "💳 <b>اطلاعات کارت</b>\n\n"
+            f"شماره کارت:\n"
+            f"<code>{card_number}</code>\n\n"
+            f"به نام:\n"
+            f"{card_holder}\n"
+        )
+
     if description:
-        text += f"\nتوضیحات:\n{description}\n"
-    text += "\n📤 بعد از واریز، عکس رسید پرداخت را همینجا ارسال کنید."
+        text += (
+            f"\nتوضیحات:\n"
+            f"{description}\n"
+        )
 
-    await message.answer(text, reply_markup=deposit_cancel_keyboard())
+    text += (
+        "\n📤 بعد از کارت‌به‌کارت، "
+        "عکس رسید پرداخت را همینجا ارسال کنید."
+    )
+
+    await message.answer(
+        text,
+        reply_markup=deposit_cancel_keyboard(),
+    )
 
 
-@router.message(DepositStates.WAITING_RECEIPT, F.photo)
-async def handle_deposit_receipt(message: Message, state: FSMContext) -> None:
+# =========================================================
+# دریافت رسید
+# =========================================================
+
+
+@router.message(
+    DepositStates.WAITING_RECEIPT,
+    F.photo,
+)
+async def handle_deposit_receipt(
+    message: Message,
+    state: FSMContext,
+) -> None:
+
     data = await state.get_data()
+
     amount = data.get("amount")
+    deposit_type = data.get(
+        "deposit_type",
+        "RIAL",
+    )
+    token_amount = data.get(
+        "token_amount"
+    )
+
     if not amount:
         await state.clear()
-        await message.answer("❗️ مشکلی پیش آمد، لطفاً دوباره از کیف پول شروع کنید.")
+
+        await message.answer(
+            "❗️ مشکلی پیش آمد. "
+            "لطفاً دوباره از کیف پول شروع کنید."
+        )
+
+        return
+
+    if deposit_type == "TOKEN" and not token_amount:
+        await state.clear()
+
+        await message.answer(
+            "❗️ مقدار Token پیدا نشد. "
+            "لطفاً دوباره تلاش کنید."
+        )
+
         return
 
     file_id = message.photo[-1].file_id
 
     async with get_session() as session:
-        user = await _get_user(session, message.from_user)
-        deposit_service = DepositService(session)
-        request = await deposit_service.create_request(user.id, amount)
-        await deposit_service.attach_receipt(request.id, file_id)
+
+        user = await _get_user(
+            session,
+            message.from_user,
+        )
+
+        deposit_service = DepositService(
+            session
+        )
+
+        request = await deposit_service.create_request(
+            user_id=user.id,
+            amount=amount,
+            deposit_type=deposit_type,
+            token_amount=token_amount,
+        )
+
+        await deposit_service.attach_receipt(
+            request.id,
+            file_id,
+        )
 
     await state.clear()
+
+    if deposit_type == "TOKEN":
+
+        user_message = (
+            "✅ <b>رسید شارژ Token دریافت شد</b>\n\n"
+            f"🪙 تعداد: <b>{token_amount:,} Token</b>\n"
+            f"💰 مبلغ: <b>{amount:,} تومان</b>\n\n"
+            "درخواست شما برای بررسی به ادمین ارسال شد."
+        )
+
+    else:
+
+        user_message = (
+            "✅ <b>رسید شارژ ریالی دریافت شد</b>\n\n"
+            f"💰 مبلغ: <b>{amount:,} تومان</b>\n\n"
+            "درخواست شما برای بررسی به ادمین ارسال شد."
+        )
+
+    user_message += (
+        "\n\n"
+        "پس از تأیید، موجودی شما به‌صورت خودکار "
+        "به‌روزرسانی می‌شود."
+    )
+
     await message.answer(
-        "✅ رسید شما دریافت شد.\n\nدرخواست شارژ کیف پول برای بررسی برای ادمین ارسال شد. "
-        "به‌محض تأیید، موجودی شما به‌روزرسانی و به شما اطلاع داده می‌شود.",
+        user_message,
         reply_markup=wallet_back_keyboard(),
     )
 
-    username = f"@{message.from_user.username}" if message.from_user.username else "—"
-    caption = (
-        "💰 <b>درخواست شارژ کیف پول</b>\n\n"
-        f"کاربر: {username}\n"
-        f"Telegram ID: <code>{message.from_user.id}</code>\n\n"
-        f"مبلغ: <b>{amount:,} تومان</b>\n"
-        f"شماره درخواست: #{request.id}"
+    username = (
+        f"@{message.from_user.username}"
+        if message.from_user.username
+        else "—"
     )
+
+    if deposit_type == "TOKEN":
+
+        caption = (
+            "🪙 <b>درخواست شارژ Access Token</b>\n\n"
+            f"کاربر: {username}\n"
+            f"Telegram ID: "
+            f"<code>{message.from_user.id}</code>\n\n"
+            f"Token: <b>{token_amount:,}</b>\n"
+            f"مبلغ: <b>{amount:,} تومان</b>\n"
+            f"شماره درخواست: #{request.id}"
+        )
+
+    else:
+
+        caption = (
+            "💳 <b>درخواست شارژ ریالی</b>\n\n"
+            f"کاربر: {username}\n"
+            f"Telegram ID: "
+            f"<code>{message.from_user.id}</code>\n\n"
+            f"مبلغ: <b>{amount:,} تومان</b>\n"
+            f"شماره درخواست: #{request.id}"
+        )
+
     for admin_id in settings.admin_ids:
+
         try:
             await message.bot.send_photo(
                 chat_id=admin_id,
                 photo=file_id,
                 caption=caption,
-                reply_markup=admin_deposit_decision_keyboard(request.id),
+                reply_markup=admin_deposit_decision_keyboard(
+                    request.id
+                ),
             )
         except Exception:
-            # اگر ادمین بات را استارت نکرده باشد یا پیام قابل ارسال نباشد،
-            # نباید کل فرآیند کاربر را متوقف کند.
             continue
 
 
-@router.message(DepositStates.WAITING_RECEIPT)
-async def handle_deposit_receipt_wrong_type(message: Message) -> None:
-    await message.answer("📤 لطفاً رسید پرداخت را به‌صورت «عکس» ارسال کنید.")
+@router.message(
+    DepositStates.WAITING_RECEIPT
+)
+async def handle_deposit_receipt_wrong_type(
+    message: Message,
+) -> None:
+
+    await message.answer(
+        "📤 لطفاً رسید پرداخت را به‌صورت «عکس» ارسال کنید."
+    )
 
 
-# ---------- تصمیم ادمین ----------
+# =========================================================
+# تأیید توسط ادمین
+# =========================================================
 
 
-@router.callback_query(F.data.startswith("admin:deposit:approve:"))
-async def handle_admin_approve(callback: CallbackQuery) -> None:
-    if not _is_admin(callback.from_user.id):
-        await callback.answer("⛔️ شما دسترسی ادمین ندارید.", show_alert=True)
+@router.callback_query(
+    F.data.startswith("admin:deposit:approve:")
+)
+async def handle_admin_approve(
+    callback: CallbackQuery,
+) -> None:
+
+    if not _is_admin(
+        callback.from_user.id
+    ):
+        await callback.answer(
+            "⛔️ شما دسترسی ادمین ندارید.",
+            show_alert=True,
+        )
         return
 
-    request_id = int(callback.data.split(":")[3])
+    request_id = int(
+        callback.data.split(":")[3]
+    )
 
     async with get_session() as session:
-        deposit_service = DepositService(session)
+
+        deposit_service = DepositService(
+            session
+        )
+
         try:
-            request = await deposit_service.approve(request_id, callback.from_user.id)
+
+            request = await deposit_service.approve(
+                request_id,
+                callback.from_user.id,
+            )
+
         except DepositAlreadyDecidedError:
-            await callback.answer("این درخواست قبلاً بررسی شده است.", show_alert=True)
+
+            await callback.answer(
+                "این درخواست قبلاً بررسی شده است.",
+                show_alert=True,
+            )
+
             return
+
         except Exception:
-            # اگر شارژ به هر دلیلی (خطای دیتابیس و ...) انجام نشد، ادمین باید
-            # بی‌درنگ بفهمد تا موجودی کاربر بدون اطلاع خالی نماند.
-            await callback.answer("❌ خطا در تأیید. موجودی شارژ نشد؛ دوباره تلاش کنید.", show_alert=True)
+
+            await callback.answer(
+                "❌ خطا در تأیید درخواست.",
+                show_alert=True,
+            )
+
             return
 
-        new_balance = await WalletService(session).get_balance(request.user_id)
-        target_user = await session.get(User, request.user_id)
+        target_user = await session.get(
+            User,
+            request.user_id,
+        )
 
-    # این دکمه هم از پیام رسید (عکس با caption) و هم از لیست ادمین (پیام متنی
-    # بدون عکس) قابل کلیک است؛ برای هر دو حالت به‌درستی ویرایش می‌کنیم.
-    try:
-        if callback.message.caption is not None:
-            await callback.message.edit_caption(
-                caption=callback.message.caption + "\n\n✅ <b>تأیید شد</b>", reply_markup=None
-            )
+        if request.deposit_type == "TOKEN":
+
+            new_balance = target_user.token_balance
+
         else:
-            await callback.message.edit_text(
-                callback.message.text + "\n\n✅ <b>تأیید شد</b>", reply_markup=None
+
+            new_balance = await WalletService(
+                session
+            ).get_balance(
+                request.user_id
             )
+
+    try:
+
+        if callback.message.caption is not None:
+
+            await callback.message.edit_caption(
+                caption=(
+                    callback.message.caption
+                    + "\n\n✅ <b>تأیید شد</b>"
+                ),
+                reply_markup=None,
+            )
+
+        else:
+
+            await callback.message.edit_text(
+                callback.message.text
+                + "\n\n✅ <b>تأیید شد</b>",
+                reply_markup=None,
+            )
+
     except Exception:
         pass
-    await callback.answer("تأیید شد ✅")
+
+    await callback.answer(
+        "تأیید شد ✅"
+    )
 
     if target_user:
+
         try:
-            await callback.bot.send_message(
-                chat_id=target_user.telegram_id,
-                text=(
-                    "✅ <b>شارژ کیف پول تأیید شد</b>\n\n"
-                    f"مبلغ {request.amount:,} تومان به کیف پول شما اضافه شد.\n"
-                    f"موجودی جدید: <b>{new_balance:,} تومان</b>"
-                ),
-            )
+
+            if request.deposit_type == "TOKEN":
+
+                await callback.bot.send_message(
+                    chat_id=target_user.telegram_id,
+                    text=(
+                        "✅ <b>شارژ Access Token تأیید شد</b>\n\n"
+                        f"🪙 مقدار شارژ: "
+                        f"<b>{request.token_amount:,} Token</b>\n"
+                        f"موجودی جدید: "
+                        f"<b>{new_balance:,} Token</b>"
+                    ),
+                )
+
+            else:
+
+                await callback.bot.send_message(
+                    chat_id=target_user.telegram_id,
+                    text=(
+                        "✅ <b>شارژ کیف پول تأیید شد</b>\n\n"
+                        f"💰 مبلغ: "
+                        f"<b>{request.amount:,} تومان</b>\n"
+                        f"موجودی جدید: "
+                        f"<b>{new_balance:,} تومان</b>"
+                    ),
+                )
+
         except Exception:
             pass
 
-@router.callback_query(F.data.startswith("admin:deposit:reject:"))
-async def handle_admin_reject(callback: CallbackQuery) -> None:
-    if not _is_admin(callback.from_user.id):
-        await callback.answer("⛔️ شما دسترسی ادمین ندارید.", show_alert=True)
+
+# =========================================================
+# رد توسط ادمین
+# =========================================================
+
+
+@router.callback_query(
+    F.data.startswith("admin:deposit:reject:")
+)
+async def handle_admin_reject(
+    callback: CallbackQuery,
+) -> None:
+
+    if not _is_admin(
+        callback.from_user.id
+    ):
+        await callback.answer(
+            "⛔️ شما دسترسی ادمین ندارید.",
+            show_alert=True,
+        )
         return
 
-    request_id = int(callback.data.split(":")[3])
+    request_id = int(
+        callback.data.split(":")[3]
+    )
 
     async with get_session() as session:
-        deposit_service = DepositService(session)
-        try:
-            request = await deposit_service.reject(request_id, callback.from_user.id)
-        except DepositAlreadyDecidedError:
-            await callback.answer("این درخواست قبلاً بررسی شده است.", show_alert=True)
-            return
-        target_user = await session.get(User, request.user_id)
 
-    # مثل تأیید، این دکمه هم ممکن است از پیام عکس‌دار و هم از پیام متنی زده شود.
+        deposit_service = DepositService(
+            session
+        )
+
+        try:
+
+            request = await deposit_service.reject(
+                request_id,
+                callback.from_user.id,
+            )
+
+        except DepositAlreadyDecidedError:
+
+            await callback.answer(
+                "این درخواست قبلاً بررسی شده است.",
+                show_alert=True,
+            )
+
+            return
+
+        target_user = await session.get(
+            User,
+            request.user_id,
+        )
+
     try:
+
         if callback.message.caption is not None:
+
             await callback.message.edit_caption(
-                caption=callback.message.caption + "\n\n❌ <b>رد شد</b>", reply_markup=None
+                caption=(
+                    callback.message.caption
+                    + "\n\n❌ <b>رد شد</b>"
+                ),
+                reply_markup=None,
             )
+
         else:
+
             await callback.message.edit_text(
-                callback.message.text + "\n\n❌ <b>رد شد</b>", reply_markup=None
+                callback.message.text
+                + "\n\n❌ <b>رد شد</b>",
+                reply_markup=None,
             )
+
     except Exception:
         pass
-    await callback.answer("رد شد ❌")
+
+    await callback.answer(
+        "رد شد ❌"
+    )
 
     if target_user:
+
         try:
-            await callback.bot.send_message(
-                chat_id=target_user.telegram_id,
-                text=(
-                    "❌ <b>رسید شما توسط ادمین رد شد</b>\n\n"
-                    f"مبلغ: {request.amount:,} تومان\n\n"
-                    "می‌توانید با پشتیبانی در ارتباط باشید."
-                ),
-            )
+
+            if request.deposit_type == "TOKEN":
+
+                await callback.bot.send_message(
+                    chat_id=target_user.telegram_id,
+                    text=(
+                        "❌ <b>درخواست شارژ Token رد شد</b>\n\n"
+                        f"مقدار: "
+                        f"<b>{request.token_amount:,} Token</b>\n"
+                        f"مبلغ: "
+                        f"<b>{request.amount:,} تومان</b>\n\n"
+                        "برای پیگیری با پشتیبانی تماس بگیرید."
+                    ),
+                )
+
+            else:
+
+                await callback.bot.send_message(
+                    chat_id=target_user.telegram_id,
+                    text=(
+                        "❌ <b>درخواست شارژ ریالی رد شد</b>\n\n"
+                        f"مبلغ: "
+                        f"<b>{request.amount:,} تومان</b>\n\n"
+                        "برای پیگیری با پشتیبانی تماس بگیرید."
+                    ),
+                )
+
         except Exception:
             pass
