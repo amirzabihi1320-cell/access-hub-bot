@@ -35,6 +35,15 @@ class ProductService:
         await self.session.commit()
         return product
 
+    async def toggle_columns(self, product_id: int) -> Product:
+        """تعویض نمایش بین «تمام‌عرض» (۱) و «دو دکمه کنار هم» (۲) برای محصولات موجود."""
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+        product.button_columns = 2 if product.button_columns == 1 else 1
+        await self.session.commit()
+        return product
+
     async def update_price(self, product_id: int, new_price: int) -> Product:
         if new_price <= 0:
             raise ValueError("قیمت باید مثبت باشد.")

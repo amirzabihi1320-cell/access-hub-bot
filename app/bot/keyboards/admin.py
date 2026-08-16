@@ -40,11 +40,13 @@ def admin_categories_keyboard(categories) -> InlineKeyboardMarkup:
     rows = []
     for c in categories:
         mark = "🟢" if c.status else "🔴"
+        size_mark = "📏" if c.button_columns == 1 else "↔️"
         rows.append(
             [
                 InlineKeyboardButton(
                     text=f"{mark} {c.icon or ''} {c.name}", callback_data=f"admin:category:toggle:{c.id}"
                 ),
+                InlineKeyboardButton(text=size_mark, callback_data=f"admin:category:columns:{c.id}"),
                 InlineKeyboardButton(text="🗑", callback_data=f"admin:category:del:{c.id}"),
             ]
         )
@@ -108,10 +110,12 @@ def admin_product_type_pick_keyboard() -> InlineKeyboardMarkup:
 
 def admin_product_detail_keyboard(product) -> InlineKeyboardMarkup:
     mark = "🔴 غیرفعال کن" if product.status else "🟢 فعال کن"
+    size_label = "📏 نمایش: تمام‌عرض (تغییر به دو ستون)" if product.button_columns == 1 else "↔️ نمایش: دو ستون (تغییر به تمام‌عرض)"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="💰 تغییر قیمت", callback_data=f"admin:product:price:{product.id}")],
             [InlineKeyboardButton(text=mark, callback_data=f"admin:product:toggle:{product.id}")],
+            [InlineKeyboardButton(text=size_label, callback_data=f"admin:product:columns:{product.id}")],
             [InlineKeyboardButton(text="🗑 حذف محصول", callback_data=f"admin:product:del:{product.id}")],
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products")],
         ]

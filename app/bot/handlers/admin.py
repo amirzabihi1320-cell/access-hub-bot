@@ -132,6 +132,23 @@ async def handle_admin_product_toggle(callback: CallbackQuery) -> None:
     await callback.answer("ثبت شد ✅")
 
 
+@router.callback_query(F.data.startswith("admin:product:columns:"))
+async def handle_admin_product_columns_toggle(callback: CallbackQuery) -> None:
+    product_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        try:
+            product = await ProductService(session).toggle_columns(product_id)
+        except ValueError as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+        price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
+    status_label = "🟢 فعال" if product.status else "🔴 غیرفعال"
+    text = f"🛍 <b>{product.name}</b>\n\nقیمت: {price:,} تومان\nوضعیت: {status_label}"
+    label = "تمام‌عرض" if product.button_columns == 1 else "دو ستونه"
+    await callback.message.edit_text(text, reply_markup=admin_product_detail_keyboard(product))
+    await callback.answer(f"📐 نمایش: {label}")
+
+
 @router.callback_query(F.data.startswith("admin:product:price:"))
 async def handle_admin_product_price_start(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":")[3])
@@ -332,6 +349,23 @@ async def handle_admin_category_toggle(callback: CallbackQuery) -> None:
     await callback.answer("ثبت شد ✅")
 
 
+@router.callback_query(F.data.startswith("admin:category:columns:"))
+async def handle_admin_category_columns_toggle(callback: CallbackQuery) -> None:
+    category_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        try:
+            category = await CategoryService(session).toggle_columns(category_id)
+        except ValueError as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+        categories = await CategoryService(session).list_all()
+    label = "تمام‌عرض" if category.button_columns == 1 else "دو ستونه"
+    await callback.message.edit_text(
+        "📂 <b>دسته‌بندی‌ها</b>", reply_markup=admin_categories_keyboard(categories)
+    )
+    await callback.answer(f"📐 نمایش «{category.name}»: {label}")
+
+
 @router.callback_query(F.data == "admin:category:add")
 async def handle_admin_category_add_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminStates.WAITING_CATEGORY_NAME)
@@ -380,12 +414,24 @@ async def handle_layout_columns(callback: CallbackQuery, state: FSMContext) -> N
     if current_state == AdminStates.WAITING_CATEGORY_BUTTON_COLUMNS.state:
         data = await state.get_data()
 
-        async with get_session() as session:
-            category = await CategoryService(session).create(
-                data["category_name"],
-                data.get("category_icon"),
-                columns,
-            )
+        if "category_name" not in data:
+            # اگه به هر دلیلی (مثلاً ری‌استارت ربات بین مراحل) اطلاعات مرحله‌ی
+            # قبل از دست رفته باشه، به‌جای کرش خاموش، به ادمین اطلاع می‌دیم.
+            await state.clear()
+            await callback.answer("❌ اطلاعات این فرم منقضی شده. لطفاً دوباره از ➕ افزودن دسته‌بندی شروع کنید.", show_alert=True)
+            return
+
+        try:
+            async with get_session() as session:
+                category = await CategoryService(session).create(
+                    data["category_name"],
+                    data.get("category_icon"),
+                    columns,
+                )
+        except Exception as e:
+            await state.clear()
+            await callback.answer(f"❌ خطا در ساخت دسته‌بندی: {e}", show_alert=True)
+            return
 
         await state.clear()
 
@@ -401,25 +447,35 @@ async def handle_layout_columns(callback: CallbackQuery, state: FSMContext) -> N
     if current_state == AdminStates.WAITING_PRODUCT_BUTTON_COLUMNS.state:
         data = await state.get_data()
 
-        async with get_session() as session:
-            product_service = ProductService(session)
+        if "product_type" not in data or "category_id" not in data:
+            await state.clear()
+            await callback.answer("❌ اطلاعات این فرم منقضی شده. لطفاً دوباره از ➕ افزودن محصول شروع کنید.", show_alert=True)
+            return
 
-            if data["product_type"] == "FIXED":
-                product = await product_service.create_fixed(
-                    data["category_id"],
-                    data["product_name"],
-                    data["fixed_price"],
-                    columns,
-                )
-            else:
-                product = await product_service.create_variable(
-                    data["category_id"],
-                    data["product_name"],
-                    data["unit_price"],
-                    data["min_qty"],
-                    data["max_qty"],
-                    columns,
-                )
+        try:
+            async with get_session() as session:
+                product_service = ProductService(session)
+
+                if data["product_type"] == "FIXED":
+                    product = await product_service.create_fixed(
+                        data["category_id"],
+                        data["product_name"],
+                        data["fixed_price"],
+                        columns,
+                    )
+                else:
+                    product = await product_service.create_variable(
+                        data["category_id"],
+                        data["product_name"],
+                        data["unit_price"],
+                        data["min_qty"],
+                        data["max_qty"],
+                        columns,
+                    )
+        except Exception as e:
+            await state.clear()
+            await callback.answer(f"❌ خطا در ساخت محصول: {e}", show_alert=True)
+            return
 
         await state.clear()
 

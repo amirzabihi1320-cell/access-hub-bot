@@ -33,6 +33,15 @@ class CategoryService:
         await self.session.commit()
         return category
 
+    async def toggle_columns(self, category_id: int) -> Category:
+        """تعویض نمایش بین «تمام‌عرض» (۱) و «دو دکمه کنار هم» (۲) برای دسته‌بندی‌های موجود."""
+        category = await self.get(category_id)
+        if category is None:
+            raise ValueError("دسته‌بندی پیدا نشد.")
+        category.button_columns = 2 if category.button_columns == 1 else 1
+        await self.session.commit()
+        return category
+
     async def create(
         self,
         name: str,
