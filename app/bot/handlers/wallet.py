@@ -198,9 +198,10 @@ async def handle_token_deposit_start(
     await callback.message.edit_text(
         "🪙 <b>شارژ Access Token</b>\n\n"
         "تعداد Token مورد نظر را وارد کنید.\n\n"
-        "💰 هر 500 Token = 20,000 تومان\n"
+        "💰 قیمت هر 1 Token = 40 تومان\n"
         "📌 حداقل خرید: 500 Token\n"
         "♾ حداکثر خرید: ندارد\n\n"
+        "تعداد دلخواه خود را وارد کنید (مثلاً 777 یا 2500).\n"
         "مثال:\n"
         "<code>1000</code>",
         reply_markup=deposit_cancel_keyboard(),
@@ -246,14 +247,42 @@ async def handle_deposit_amount(
     )
 
     if deposit_type == "TOKEN":
-        # این مسیر مستقیماً روی صف Access Token/Game Economy (game_service.py)
-        # می‌نشیند که قبلاً به‌صراحت گفته شد قابل توسعه/تکمیل نیست؛ برای همین
-        # عمداً کرش نمی‌کند ولی درخواست را هم پردازش نمی‌کند.
-        await message.answer(
-            "❗️ شارژ Access Token در حال حاضر غیرفعال است.\n"
-            "برای شارژ کیف پول از «💳 شارژ ریالی» استفاده کنید."
+        if value < 500:
+            await message.answer(
+                "❗️ حداقل خرید 500 Token است.\n"
+                "لطفاً تعداد 500 یا بیشتر وارد کنید."
+            )
+            return
+
+        token_amount = value
+        amount = token_amount * 40
+
+        async with get_session() as session:
+            payment_info = await SettingsService(session).get("payment_info") or "اطلاعات پرداخت ثبت نشده است."
+
+        await state.update_data(
+            amount=amount,
+            token_amount=token_amount,
         )
-        await state.clear()
+        await state.set_state(DepositStates.WAITING_RECEIPT)
+
+        text = (
+            "🪙 <b>شارژ Access Token</b>\n\n"
+            f"تعداد Token: <b>{token_amount:,}</b>\n"
+            f"قیمت هر Token: <b>40 تومان</b>\n"
+            f"مبلغ قابل پرداخت: <b>{amount:,} تومان</b>\n\n"
+            "💳 <b>اطلاعات پرداخت</b>\n\n"
+            f"{payment_info}\n"
+        )
+        text += (
+            "\n📤 بعد از کارت‌به‌کارت، "
+            "عکس رسید پرداخت را همینجا ارسال کنید."
+        )
+
+        await message.answer(
+            text,
+            reply_markup=deposit_cancel_keyboard(),
+        )
         return
 
     async with get_session() as session:
