@@ -1,5 +1,6 @@
 import secrets
 import string
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,10 +33,12 @@ class UserService:
         user = result.scalar_one_or_none()
 
         if user:
-            # به‌روزرسانی اطلاعات نمایشی در صورت تغییر
+            # به‌روزرسانی اطلاعات نمایشی در صورت تغییر + ثبت آخرین فعالیت
+            # (برای آمار «کاربران فعال» در داشبورد ادمین لازم است).
             user.username = username
             user.first_name = first_name
             user.last_name = last_name
+            user.last_activity = datetime.now(timezone.utc)
             await self.session.commit()
             return user
 
@@ -57,6 +60,7 @@ class UserService:
             last_name=last_name,
             referral_code=_generate_referral_code(),
             referred_by=referred_by_id,
+            last_activity=datetime.now(timezone.utc),
         )
         self.session.add(user)
         await self.session.flush()  # برای گرفتن user.id قبل از commit

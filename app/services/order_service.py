@@ -123,6 +123,38 @@ class OrderService:
         )
         return result.scalar_one()
 
+    async def stats_since(self, since) -> tuple[int, int]:
+        """(تعداد سفارش, مجموع مبلغ) برای سفارش‌های موفق از یک تاریخ به بعد."""
+        result = await self.session.execute(
+            select(func.count(), func.coalesce(func.sum(Order.final_price), 0))
+            .where(
+                Order.status.in_([OrderStatus.WAITING_ADMIN.value, OrderStatus.COMPLETED.value]),
+                Order.created_at >= since,
+            )
+        )
+        row = result.one()
+        return row[0], row[1]
+
+    async def best_sellers(self, limit: int = 5, since=None) -> list[tuple[int, int, int]]:
+        """(product_id, تعداد فروش, مجموع مبلغ) برای پرفروش‌ترین محصولات."""
+        query = (
+            select(Order.product_id, func.count(), func.coalesce(func.sum(Order.final_price), 0))
+            .where(Order.status.in_([OrderStatus.WAITING_ADMIN.value, OrderStatus.COMPLETED.value]))
+            .group_by(Order.product_id)
+            .order_by(func.count().desc())
+            .limit(limit)
+        )
+        if since is not None:
+            query = query.where(Order.created_at >= since)
+        result = await self.session.execute(query)
+        return [(row[0], row[1], row[2]) for row in result.all()]
+
+    async def pending_count(self) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(Order).where(Order.status == OrderStatus.WAITING_ADMIN.value)
+        )
+        return result.scalar_one()
+
 
 def build_order_report_text(order: Order, product_name: str) -> str:
     """

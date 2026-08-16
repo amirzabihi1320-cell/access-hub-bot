@@ -11,8 +11,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.exceptions import TelegramBadRequest
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
+from app.models.product import Product
 from app.bot.keyboards.admin import (
     EDITABLE_SETTINGS,
     admin_back_keyboard,
@@ -43,6 +45,7 @@ from app.services.membership_service import MembershipService
 from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.services.settings_service import SettingsService
+from app.services.stats_service import StatsService
 from app.services.user_service import UserService
 
 router = Router(name="admin")
@@ -91,6 +94,43 @@ async def handle_admin_menu(callback: CallbackQuery, state: FSMContext) -> None:
     async with get_session() as session:
         text = await _dashboard_text(session)
     await callback.message.edit_text(text, reply_markup=admin_dashboard_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:stats")
+async def handle_admin_stats(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+    month_start = now - timedelta(days=30)
+
+    async with get_session() as session:
+        order_service = OrderService(session)
+        today_count, today_sum = await order_service.stats_since(today_start)
+        week_count, week_sum = await order_service.stats_since(week_start)
+        month_count, month_sum = await order_service.stats_since(month_start)
+        top_products = await order_service.best_sellers(limit=5)
+
+        lines_top = []
+        for product_id, count, total in top_products:
+            product = await session.get(Product, product_id)
+            name = product.name if product else f"محصول #{product_id}"
+            lines_top.append(f"• {name} — {count} فروش ({total:,} تومان)")
+
+    text = (
+        "📊 <b>آمار فروش</b>\n\n"
+        f"📅 امروز: {today_count} سفارش — {today_sum:,} تومان\n"
+        f"📅 ۷ روز اخیر: {week_count} سفارش — {week_sum:,} تومان\n"
+        f"📅 ۳۰ روز اخیر: {month_count} سفارش — {month_sum:,} تومان\n\n"
+        "🏆 <b>پرفروش‌ترین محصولات</b>\n"
+        + ("\n".join(lines_top) if lines_top else "هنوز فروشی ثبت نشده.")
+    )
+
+    await callback.message.edit_text(text, reply_markup=admin_back_keyboard())
     await callback.answer()
 
 

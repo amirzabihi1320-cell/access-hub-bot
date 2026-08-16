@@ -25,6 +25,7 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments"),
+                InlineKeyboardButton(text="📊 آمار فروش", callback_data="admin:stats"),
             ],
         ]
     )
