@@ -36,6 +36,11 @@ class Product(Base):
     # 2 = دو دکمه کنار هم
     button_columns: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
+    # تخفیف زمان‌دار (اختیاری). وقتی discount_percent ست شده و هنوز به
+    # discount_expires_at نرسیده باشیم، قیمت نمایشی/نهایی تخفیف می‌خورد.
+    discount_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    discount_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

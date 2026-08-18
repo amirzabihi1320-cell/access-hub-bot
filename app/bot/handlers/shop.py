@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -10,8 +12,9 @@ from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.category_service import CategoryService
 from app.services.order_service import OrderService, ProductUnavailableError, build_order_report_text
-from app.services.pricing_service import InvalidQuantityError, calculate_price
+from app.services.pricing_service import InvalidQuantityError, apply_discount, calculate_price, is_discount_active
 from app.services.product_service import ProductService
+from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.services.wallet_service import InsufficientBalanceError
 from app.utils.message_manager import MessageManager
@@ -22,6 +25,13 @@ router = Router(name="shop")
 # فقط در چت خصوصی خودِ کاربر پردازش شود).
 router.message.filter(F.chat.type == "private")
 settings = get_settings()
+
+
+def _format_dt(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M")
+
 
 # قفل درون‌حافظه‌ای برای جلوگیری از دوبار کلیک روی پرداخت قبل از تمام‌شدن
 # پردازش قبلی (بخش ۱۷: جلوگیری از Duplicate Order). چون سرویس روی Render
@@ -34,7 +44,25 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     categories = await CategoryService(session).list_active()
     if not categories:
         return None
-    return "🛍 دسته‌بندی‌ها", categories_keyboard(categories, 1)
+
+    header = "🛍 دسته‌بندی‌ها"
+    extra_row: list[InlineKeyboardButton] = []
+
+    featured_id = await SettingsService(session).get("featured_product_id")
+    if featured_id and featured_id.isdigit():
+        featured = await ProductService(session).get(int(featured_id))
+        if featured and featured.status:
+            price = featured.fixed_price if featured.product_type == "FIXED" else featured.unit_price
+            if is_discount_active(featured):
+                price, _ = apply_discount(featured, price)
+            header = f"🔥 <b>پیشنهاد ویژه: {featured.name}</b> — {price:,} تومان\n\n🛍 دسته‌بندی‌ها"
+            extra_row = [InlineKeyboardButton(text=f"🔥 {featured.name}", callback_data=f"shop:product:{featured.id}")]
+
+    keyboard = categories_keyboard(categories, 1)
+    if extra_row:
+        keyboard.inline_keyboard.insert(0, extra_row)
+
+    return header, keyboard
 
 
 @router.callback_query(F.data == "menu:shop")
@@ -86,10 +114,22 @@ async def handle_product_detail(callback: CallbackQuery) -> None:
         text += f"{product.description}\n\n"
 
     if product.product_type == "FIXED":
-        text += f"قیمت:\n<b>{product.fixed_price:,} تومان</b>"
+        if is_discount_active(product):
+            discounted, _ = apply_discount(product, product.fixed_price)
+            text += (
+                f"🔥 <s>{product.fixed_price:,} تومان</s>\n"
+                f"قیمت: <b>{discounted:,} تومان</b> (٪{product.discount_percent} تخفیف)\n"
+                f"⏳ تا {_format_dt(product.discount_expires_at)}"
+            )
+        else:
+            text += f"قیمت:\n<b>{product.fixed_price:,} تومان</b>"
     else:
+        unit_text = f"<b>{product.unit_price:,} تومان</b>"
+        if is_discount_active(product):
+            discounted, _ = apply_discount(product, product.unit_price)
+            unit_text = f"<s>{product.unit_price:,}</s> <b>{discounted:,} تومان</b> (٪{product.discount_percent} تخفیف)"
         text += (
-            f"قیمت هر واحد: <b>{product.unit_price:,} تومان</b>\n"
+            f"قیمت هر واحد: {unit_text}\n"
             f"حداقل: {product.min_quantity or 1} | حداکثر: {product.max_quantity or '∞'}"
         )
 

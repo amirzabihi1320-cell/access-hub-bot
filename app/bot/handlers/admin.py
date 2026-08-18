@@ -22,6 +22,7 @@ from app.bot.keyboards.admin import (
     admin_category_delete_confirm_keyboard,
     admin_channels_keyboard,
     admin_dashboard_keyboard,
+    admin_discount_duration_keyboard,
     admin_product_category_pick_keyboard,
     admin_product_delete_confirm_keyboard,
     admin_product_detail_keyboard,
@@ -43,9 +44,9 @@ from app.services.category_service import CategoryService
 from app.services.deposit_service import DepositService
 from app.services.membership_service import MembershipService
 from app.services.order_service import OrderService
+from app.services.pricing_service import apply_discount, is_discount_active
 from app.services.product_service import ProductService
 from app.services.settings_service import SettingsService
-from app.services.stats_service import StatsService
 from app.services.user_service import UserService
 
 router = Router(name="admin")
@@ -137,6 +138,29 @@ async def handle_admin_stats(callback: CallbackQuery) -> None:
 # ---------- محصولات ----------
 
 
+async def _product_detail_view(session, product) -> tuple[str, InlineKeyboardMarkup]:
+    price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
+    status_label = "🟢 فعال" if product.status else "🔴 غیرفعال"
+    text = f"🛍 <b>{product.name}</b>\n\nقیمت: {price:,} تومان\nوضعیت: {status_label}"
+
+    if is_discount_active(product):
+        discounted, _ = apply_discount(product, price)
+        expires = product.discount_expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        text += (
+            f"\n🔥 تخفیف فعال: ٪{product.discount_percent} (قیمت با تخفیف: {discounted:,} تومان)\n"
+            f"⏳ تا: {expires.strftime('%Y-%m-%d %H:%M')} UTC"
+        )
+
+    featured_id = await SettingsService(session).get("featured_product_id")
+    is_featured = bool(featured_id and featured_id.isdigit() and int(featured_id) == product.id)
+    if is_featured:
+        text += "\n📌 این محصول الان پیشنهاد ویژه‌ی فروشگاهه."
+
+    return text, admin_product_detail_keyboard(product, is_featured)
+
+
 @router.callback_query(F.data == "admin:products")
 async def handle_admin_products(callback: CallbackQuery) -> None:
     async with get_session() as session:
@@ -150,13 +174,11 @@ async def handle_admin_product_view(callback: CallbackQuery) -> None:
     product_id = int(callback.data.split(":")[3])
     async with get_session() as session:
         product = await ProductService(session).get(product_id)
-    if not product:
-        await callback.answer("محصول پیدا نشد.", show_alert=True)
-        return
-    price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
-    status_label = "🟢 فعال" if product.status else "🔴 غیرفعال"
-    text = f"🛍 <b>{product.name}</b>\n\nقیمت: {price:,} تومان\nوضعیت: {status_label}"
-    await callback.message.edit_text(text, reply_markup=admin_product_detail_keyboard(product))
+        if not product:
+            await callback.answer("محصول پیدا نشد.", show_alert=True)
+            return
+        text, keyboard = await _product_detail_view(session, product)
+    await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
 
 
@@ -165,10 +187,8 @@ async def handle_admin_product_toggle(callback: CallbackQuery) -> None:
     product_id = int(callback.data.split(":")[3])
     async with get_session() as session:
         product = await ProductService(session).toggle_status(product_id)
-        price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
-    status_label = "🟢 فعال" if product.status else "🔴 غیرفعال"
-    text = f"🛍 <b>{product.name}</b>\n\nقیمت: {price:,} تومان\nوضعیت: {status_label}"
-    await callback.message.edit_text(text, reply_markup=admin_product_detail_keyboard(product))
+        text, keyboard = await _product_detail_view(session, product)
+    await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer("ثبت شد ✅")
 
 
@@ -181,12 +201,27 @@ async def handle_admin_product_columns_toggle(callback: CallbackQuery) -> None:
         except ValueError as e:
             await callback.answer(str(e), show_alert=True)
             return
-        price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
-    status_label = "🟢 فعال" if product.status else "🔴 غیرفعال"
-    text = f"🛍 <b>{product.name}</b>\n\nقیمت: {price:,} تومان\nوضعیت: {status_label}"
+        text, keyboard = await _product_detail_view(session, product)
     label = "تمام‌عرض" if product.button_columns == 1 else "دو ستونه"
-    await callback.message.edit_text(text, reply_markup=admin_product_detail_keyboard(product))
+    await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer(f"📐 نمایش: {label}")
+
+
+@router.callback_query(F.data.startswith("admin:product:up:") | F.data.startswith("admin:product:down:"))
+async def handle_admin_product_move(callback: CallbackQuery) -> None:
+    parts = callback.data.split(":")
+    direction = parts[2]  # "up" یا "down"
+    product_id = int(parts[3])
+    async with get_session() as session:
+        try:
+            await ProductService(session).move(product_id, direction)
+        except ValueError as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+        product = await ProductService(session).get(product_id)
+        text, keyboard = await _product_detail_view(session, product)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer("↕️ جابه‌جا شد")
 
 
 @router.callback_query(F.data.startswith("admin:product:price:"))
@@ -364,6 +399,87 @@ async def handle_admin_product_max_qty(message: Message, state: FSMContext) -> N
     )
 
 
+@router.callback_query(F.data.startswith("admin:product:pin:"))
+async def handle_admin_product_pin(callback: CallbackQuery) -> None:
+    product_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+        if not product:
+            await callback.answer("محصول پیدا نشد.", show_alert=True)
+            return
+        settings_service = SettingsService(session)
+        current = await settings_service.get("featured_product_id")
+        is_currently_featured = bool(current and current.isdigit() and int(current) == product_id)
+        await settings_service.set("featured_product_id", "" if is_currently_featured else str(product_id))
+        text, keyboard = await _product_detail_view(session, product)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer("📌 برداشته شد." if is_currently_featured else "📌 پین شد!")
+
+
+@router.callback_query(F.data.regexp(r"^admin:product:discount:\d+$"))
+async def handle_admin_product_discount_entry(callback: CallbackQuery) -> None:
+    product_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+        if not product:
+            await callback.answer("محصول پیدا نشد.", show_alert=True)
+            return
+
+        if is_discount_active(product):
+            # لغو تخفیف فعال
+            product.discount_percent = None
+            product.discount_expires_at = None
+            await session.commit()
+            text, keyboard = await _product_detail_view(session, product)
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            await callback.answer("❌ تخفیف لغو شد.")
+            return
+
+    await callback.message.edit_text(
+        f"⏱ مدت تخفیف برای «{product.name}» را انتخاب کنید:",
+        reply_markup=admin_discount_duration_keyboard(product_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:product:discount:hours:"))
+async def handle_admin_product_discount_hours(callback: CallbackQuery, state: FSMContext) -> None:
+    parts = callback.data.split(":")
+    product_id, hours = int(parts[4]), int(parts[5])
+    await state.update_data(discount_product_id=product_id, discount_hours=hours)
+    await state.set_state(AdminStates.WAITING_PRODUCT_DISCOUNT_PERCENT)
+    await callback.message.edit_text("🔥 درصد تخفیف را وارد کنید (عددی بین ۱ تا ۹۰):")
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_PRODUCT_DISCOUNT_PERCENT, F.text)
+async def handle_admin_product_discount_percent(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    value = message.text.strip()
+    if not value.isdigit() or not 1 <= int(value) <= 90:
+        await message.answer("❗️ درصد باید عددی بین ۱ تا ۹۰ باشد.")
+        return
+
+    data = await state.get_data()
+    product_id = data["discount_product_id"]
+    hours = data["discount_hours"]
+    await state.clear()
+
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+        if not product:
+            await message.answer("❌ محصول پیدا نشد.")
+            return
+        product.discount_percent = int(value)
+        product.discount_expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
+        await session.commit()
+        text, keyboard = await _product_detail_view(session, product)
+
+    await message.answer(f"✅ تخفیف ٪{value} برای «{product.name}» فعال شد.")
+    await message.answer(text, reply_markup=keyboard)
+
+
 # ---------- دسته‌بندی‌ها ----------
 
 
@@ -404,6 +520,24 @@ async def handle_admin_category_columns_toggle(callback: CallbackQuery) -> None:
         "📂 <b>دسته‌بندی‌ها</b>", reply_markup=admin_categories_keyboard(categories)
     )
     await callback.answer(f"📐 نمایش «{category.name}»: {label}")
+
+
+@router.callback_query(F.data.startswith("admin:category:up:") | F.data.startswith("admin:category:down:"))
+async def handle_admin_category_move(callback: CallbackQuery) -> None:
+    parts = callback.data.split(":")
+    direction = parts[2]
+    category_id = int(parts[3])
+    async with get_session() as session:
+        try:
+            await CategoryService(session).move(category_id, direction)
+        except ValueError as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+        categories = await CategoryService(session).list_all()
+    await callback.message.edit_text(
+        "📂 <b>دسته‌بندی‌ها</b>", reply_markup=admin_categories_keyboard(categories)
+    )
+    await callback.answer("↕️ جابه‌جا شد")
 
 
 @router.callback_query(F.data == "admin:category:add")
@@ -759,6 +893,11 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
             return
         if not 0 <= fee <= 100:
             await message.answer("❗️ کارمزد باید بین ۰ تا ۱۰۰ درصد باشد.")
+            return
+
+    if key == "referral_cashback_percent":
+        if not value.isdigit() or not 0 <= int(value) <= 50:
+            await message.answer("❗️ درصد پاداش رفرال باید عددی بین ۰ تا ۵۰ باشد.")
             return
 
     async with get_session() as session:

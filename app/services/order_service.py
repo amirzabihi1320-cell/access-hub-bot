@@ -19,6 +19,7 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.user import User
 from app.services.pricing_service import calculate_price
+from app.services.settings_service import SettingsService
 from app.services.wallet_service import WalletService
 
 class OrderAlreadyProcessedError(Exception):
@@ -69,6 +70,30 @@ class OrderService:
         user = await self.session.get(User, user_id)
         user.total_purchases += 1
         user.total_spent += price.total_price
+
+        # پاداش رفرال (Cashback): اگر خریدار توسط کاربر دیگری معرفی شده و
+        # درصد پاداش در تنظیمات فعال باشد، درصدی از مبلغ همین خرید به
+        # کیف‌پول معرف واریز می‌شود. چون هر فراخوانی create_and_pay یک
+        # سفارش کاملاً جدید (order.id تازه) می‌سازد، reference_id ذاتاً
+        # یکتاست و امکان واریز تکراری برای یک خرید وجود ندارد.
+        if user.referred_by:
+            cashback_percent_raw = await SettingsService(self.session).get("referral_cashback_percent", "0")
+            try:
+                cashback_percent = int(cashback_percent_raw)
+            except (TypeError, ValueError):
+                cashback_percent = 0
+            if cashback_percent > 0:
+                cashback_amount = price.total_price * cashback_percent // 100
+                if cashback_amount > 0:
+                    referrer = await self.session.get(User, user.referred_by)
+                    if referrer:
+                        await WalletService(self.session).credit(
+                            user_id=referrer.id,
+                            amount=cashback_amount,
+                            type_=WalletTransactionType.BONUS,
+                            reference_id=f"referral-cashback:order:{order.id}",
+                            description=f"پاداش رفرال از خرید {product.name}",
+                        )
 
         await self.session.commit()
         await self.session.refresh(order)

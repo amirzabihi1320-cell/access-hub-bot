@@ -16,6 +16,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "welcome_text": "خوش آمدید.\nدسترسی آسان به سرویس‌ها و محصولات دیجیتال.",
     "order_report_enabled": "true",
     "token_transfer_fee_percent": "10",
+    # درصدی از مبلغ خرید که به‌عنوان پاداش (Cashback) به کیف‌پول معرف بازمی‌گردد؛ ۰ = غیرفعال.
+    "referral_cashback_percent": "0",
+    # آیدی محصولی که به‌عنوان «پیشنهاد ویژه» بالای فروشگاه پین می‌شود؛ خالی = چیزی پین نیست.
+    "featured_product_id": "",
 }
 
 

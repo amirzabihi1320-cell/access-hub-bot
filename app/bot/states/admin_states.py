@@ -19,3 +19,5 @@ class AdminStates(StatesGroup):
     WAITING_CHANNEL_TITLE = State()
     WAITING_CHANNEL_USERNAME = State()
     WAITING_CHANNEL_INVITE_LINK = State()
+
+    WAITING_PRODUCT_DISCOUNT_PERCENT = State()

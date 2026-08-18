@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order
@@ -13,7 +13,7 @@ class ProductService:
         result = await self.session.execute(
             select(Product)
             .where(Product.category_id == category_id, Product.status.is_(True))
-            .order_by(Product.sort_order)
+            .order_by(Product.sort_order, Product.id)
         )
         return list(result.scalars().all())
 
@@ -24,7 +24,9 @@ class ProductService:
     # ---------- ادمین (بخش ۲۹: مدیریت محصولات) ----------
 
     async def list_all(self) -> list[Product]:
-        result = await self.session.execute(select(Product).order_by(Product.category_id, Product.sort_order))
+        result = await self.session.execute(
+            select(Product).order_by(Product.category_id, Product.sort_order, Product.id)
+        )
         return list(result.scalars().all())
 
     async def toggle_status(self, product_id: int) -> Product:
@@ -44,6 +46,32 @@ class ProductService:
         await self.session.commit()
         return product
 
+    async def move(self, product_id: int, direction: str) -> None:
+        """
+        جابه‌جایی محصول در ترتیب نمایش داخل همون دسته‌بندی (بالا/پایین).
+        مقایسه بر اساس (sort_order, id) تا با مقادیر تکراری قدیمی هم درست کار کند.
+        """
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+
+        key = tuple_(Product.sort_order, Product.id)
+        my_key = (product.sort_order, product.id)
+
+        query = select(Product).where(Product.category_id == product.category_id)
+        if direction == "up":
+            query = query.where(key < my_key).order_by(Product.sort_order.desc(), Product.id.desc())
+        else:
+            query = query.where(key > my_key).order_by(Product.sort_order.asc(), Product.id.asc())
+
+        result = await self.session.execute(query.limit(1))
+        neighbor = result.scalar_one_or_none()
+        if neighbor is None:
+            return  # همین‌جا اولین/آخرین است، کاری لازم نیست
+
+        product.sort_order, neighbor.sort_order = neighbor.sort_order, product.sort_order
+        await self.session.commit()
+
     async def update_price(self, product_id: int, new_price: int) -> Product:
         if new_price <= 0:
             raise ValueError("قیمت باید مثبت باشد.")
@@ -56,6 +84,12 @@ class ProductService:
             product.unit_price = new_price
         await self.session.commit()
         return product
+
+    async def _next_sort_order(self, category_id: int) -> int:
+        result = await self.session.execute(
+            select(func.coalesce(func.max(Product.sort_order), -1)).where(Product.category_id == category_id)
+        )
+        return result.scalar_one() + 1
 
     async def create_fixed(
         self,
@@ -75,6 +109,7 @@ class ProductService:
             fixed_price=price,
             status=True,
             button_columns=button_columns,
+            sort_order=await self._next_sort_order(category_id),
         )
         self.session.add(product)
         await self.session.flush()
@@ -129,6 +164,7 @@ class ProductService:
             max_quantity=max_quantity,
             status=True,
             button_columns=button_columns,
+            sort_order=await self._next_sort_order(category_id),
         )
         self.session.add(product)
         await self.session.flush()
