@@ -37,6 +37,18 @@ class ProductService:
         await self.session.commit()
         return product
 
+    async def update_button_style(self, product_id: int, style: str) -> Product:
+        """تنظیم رنگ دکمه محصول برای نمایش در فروشگاه."""
+        style = style.lower().strip()
+        if style not in {"primary", "success", "danger"}:
+            raise ValueError("رنگ دکمه باید primary، success یا danger باشد.")
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+        product.button_style = style
+        await self.session.commit()
+        return product
+
     async def toggle_columns(self, product_id: int) -> Product:
         """تعویض نمایش بین «تمام‌عرض» (۱) و «دو دکمه کنار هم» (۲) برای محصولات موجود."""
         product = await self.get(product_id)

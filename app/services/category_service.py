@@ -33,6 +33,18 @@ class CategoryService:
         await self.session.commit()
         return category
 
+    async def update_button_style(self, category_id: int, style: str) -> Category:
+        """تنظیم رنگ دکمه دسته‌بندی برای نمایش در فروشگاه."""
+        style = style.lower().strip()
+        if style not in {"primary", "success", "danger"}:
+            raise ValueError("رنگ دکمه باید primary، success یا danger باشد.")
+        category = await self.get(category_id)
+        if category is None:
+            raise ValueError("دسته‌بندی پیدا نشد.")
+        category.button_style = style
+        await self.session.commit()
+        return category
+
     async def toggle_columns(self, category_id: int) -> Category:
         """تعویض نمایش بین «تمام‌عرض» (۱) و «دو دکمه کنار هم» (۲) برای دسته‌بندی‌های موجود."""
         category = await self.get(category_id)

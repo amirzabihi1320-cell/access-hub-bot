@@ -6,6 +6,17 @@ from app.models.product import Product
 from app.utils.keyboards import DEFAULT_COLUMNS, clamp_columns
 
 
+STYLE_MAP = {
+    "primary": ButtonStyle.PRIMARY,
+    "success": ButtonStyle.SUCCESS,
+    "danger": ButtonStyle.DANGER,
+}
+
+
+def button_style(value: str | None, default: ButtonStyle) -> ButtonStyle:
+    return STYLE_MAP.get((value or "").lower(), default)
+
+
 def _mixed_columns_buttons(items, button_factory, default_columns: int = 1):
     """
     چیدمان دکمه‌ها بر اساس button_columns هر آیتم.
@@ -56,7 +67,7 @@ def categories_keyboard(
         lambda cat: InlineKeyboardButton(
             text=f"{cat.icon or '📦'} {cat.name}",
             callback_data=f"shop:category:{cat.id}",
-            style=ButtonStyle.SUCCESS,
+            style=button_style(getattr(cat, "button_style", None), ButtonStyle.SUCCESS),
         ),
         columns,
     )
@@ -73,7 +84,7 @@ def products_keyboard(
         lambda product: InlineKeyboardButton(
             text=f"🛍 {product.name}",
             callback_data=f"shop:product:{product.id}",
-            style=ButtonStyle.PRIMARY,
+            style=button_style(getattr(product, "button_style", None), ButtonStyle.PRIMARY),
         ),
         columns,
     )
@@ -98,14 +109,18 @@ def product_detail_keyboard(product: Product) -> InlineKeyboardMarkup:
             style=ButtonStyle.PRIMARY,
         )])
     else:
-        buttons.append([InlineKeyboardButton(
-            text="💳 خرید با کیف پول",
-            callback_data=f"shop:buy:{product.id}:1",
-            style=ButtonStyle.SUCCESS,
-        )])
+        # روش‌های پرداخت محصول: ریالی از کیف‌پول ریالی یا با Access Token.
+        # هر روش در یک ردیف مستقل نمایش داده می‌شود تا انتخاب پرداخت واضح باشد.
+        rial_price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
+        if rial_price is not None:
+            buttons.append([InlineKeyboardButton(
+                text=f"💳 پرداخت ریالی — {rial_price:,} تومان",
+                callback_data=f"shop:buy:{product.id}:1",
+                style=ButtonStyle.SUCCESS,
+            )])
         if product.token_price:
             buttons.append([InlineKeyboardButton(
-                text=f"🪙 خرید با Token — {product.token_price:,}",
+                text=f"🪙 پرداخت توکنی — {product.token_price:,} Token",
                 callback_data=f"shop:buy_token:{product.id}:1",
                 style=ButtonStyle.PRIMARY,
             )])

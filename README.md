@@ -142,3 +142,9 @@ Handler فقط پیام تلگرام را می‌گیرد → Service را صد�
 - هیچ‌وقت `BOT_TOKEN` یا `DATABASE_URL` را داخل کد یا Git commit نکن — همیشه در `.env`
 - فایل `.env` در `.gitignore` قرار دارد
 - تمام عملیات مالی باید از `WalletService` عبور کنند (در فاز ۳) تا Ledger درست ثبت شود
+
+
+### Shop button customization
+- Category and product buttons support `primary` (blue), `success` (green), and `danger` (red).
+- Admin can change each item's button color from its management screen.
+- Button layout remains per-item: full-width (1) or two columns (2).

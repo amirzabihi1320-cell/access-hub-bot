@@ -36,6 +36,9 @@ class Product(Base):
     # 2 = دو دکمه کنار هم
     button_columns: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
+    # استایل رنگی دکمه فروشگاه: primary / success / danger
+    button_style: Mapped[str] = mapped_column(String(16), nullable=False, default="primary")
+
     # قیمت اختیاری محصول با Access Token. برای FIXED قیمت کل محصول
     # و برای VARIABLE_QUANTITY قیمت هر واحد است. مقدار None یعنی خرید Token فعال نیست.
     token_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

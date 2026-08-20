@@ -26,6 +26,8 @@ from app.bot.keyboards.admin import (
     admin_product_category_pick_keyboard,
     admin_product_delete_confirm_keyboard,
     admin_product_detail_keyboard,
+    admin_category_style_keyboard,
+    admin_product_style_keyboard,
     admin_product_type_pick_keyboard,
     admin_products_keyboard,
     admin_settings_keyboard,
@@ -301,6 +303,36 @@ async def handle_admin_product_token_price_value(message: Message, state: FSMCon
             return
     await state.clear()
     await message.answer(text, reply_markup=keyboard)
+
+
+@router.callback_query(F.data.regexp(r"^admin:product:style:\d+$"))
+async def handle_admin_product_style_entry(callback: CallbackQuery) -> None:
+    product_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+    if not product:
+        await callback.answer("محصول پیدا نشد.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        f"🎨 رنگ دکمه «{product.name}» را انتخاب کنید:",
+        reply_markup=admin_product_style_keyboard(product_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^admin:product:style:\d+:(primary|success|danger)$"))
+async def handle_admin_product_style_set(callback: CallbackQuery) -> None:
+    parts = callback.data.split(":")
+    product_id, style = int(parts[3]), parts[4]
+    async with get_session() as session:
+        try:
+            product = await ProductService(session).update_button_style(product_id, style)
+            text, keyboard = await _product_detail_view(session, product)
+        except ValueError as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer(f"🎨 رنگ دکمه روی {style} تنظیم شد.")
 
 
 @router.callback_query(F.data.startswith("admin:product:del:"))
@@ -712,6 +744,38 @@ async def handle_layout_columns(callback: CallbackQuery, state: FSMContext) -> N
         return
 
     await callback.answer("این انتخاب دیگر فعال نیست.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^admin:category:style:\d+$"))
+async def handle_admin_category_style_entry(callback: CallbackQuery) -> None:
+    category_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        category = await CategoryService(session).get(category_id)
+    if not category:
+        await callback.answer("دسته‌بندی پیدا نشد.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        f"🎨 رنگ دکمه «{category.name}» را انتخاب کنید:",
+        reply_markup=admin_category_style_keyboard(category_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^admin:category:style:\d+:(primary|success|danger)$"))
+async def handle_admin_category_style_set(callback: CallbackQuery) -> None:
+    parts = callback.data.split(":")
+    category_id, style = int(parts[3]), parts[4]
+    async with get_session() as session:
+        try:
+            category = await CategoryService(session).update_button_style(category_id, style)
+            categories = await CategoryService(session).list_all()
+        except ValueError as e:
+            await callback.answer(str(e), show_alert=True)
+            return
+    await callback.message.edit_text(
+        "📂 <b>دسته‌بندی‌ها</b>", reply_markup=admin_categories_keyboard(categories)
+    )
+    await callback.answer(f"🎨 رنگ «{category.name}» روی {style} تنظیم شد.")
 
 
 @router.callback_query(F.data.startswith("admin:category:del:"))

@@ -212,14 +212,14 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
         f"قیمت نهایی:\n<b>{result.total_price:,} تومان</b>"
     )
     rows = [[InlineKeyboardButton(
-        text="💳 پرداخت با کیف پول",
+        text=f"💳 پرداخت ریالی — {result.total_price:,} تومان",
         callback_data=f"shop:buy:{product.id}:{result.quantity}",
         style=ButtonStyle.SUCCESS,
     )]]
     token_total = _token_total(product, result.quantity)
     if token_total:
         rows.append([InlineKeyboardButton(
-            text=f"🪙 پرداخت با Token — {token_total:,}",
+            text=f"🪙 پرداخت توکنی — {token_total:,} Token",
             callback_data=f"shop:buy_token:{product.id}:{result.quantity}",
             style=ButtonStyle.PRIMARY,
         )])

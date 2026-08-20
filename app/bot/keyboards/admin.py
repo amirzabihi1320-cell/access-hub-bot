@@ -41,6 +41,43 @@ def admin_back_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+STYLE_LABELS = {
+    "primary": "🔵 آبی",
+    "success": "🟢 سبز",
+    "danger": "🔴 قرمز",
+}
+
+
+def style_label(style: str | None, default: str) -> str:
+    return STYLE_LABELS.get((style or "").lower(), STYLE_LABELS[default])
+
+
+def admin_category_style_keyboard(category_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔵 آبی", callback_data=f"admin:category:style:{category_id}:primary", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton(text="🟢 سبز", callback_data=f"admin:category:style:{category_id}:success", style=ButtonStyle.SUCCESS),
+                InlineKeyboardButton(text="🔴 قرمز", callback_data=f"admin:category:style:{category_id}:danger", style=ButtonStyle.DANGER),
+            ],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:categories")],
+        ]
+    )
+
+
+def admin_product_style_keyboard(product_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔵 آبی", callback_data=f"admin:product:style:{product_id}:primary", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton(text="🟢 سبز", callback_data=f"admin:product:style:{product_id}:success", style=ButtonStyle.SUCCESS),
+                InlineKeyboardButton(text="🔴 قرمز", callback_data=f"admin:product:style:{product_id}:danger", style=ButtonStyle.DANGER),
+            ],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products")],
+        ]
+    )
+
+
 def admin_categories_keyboard(categories) -> InlineKeyboardMarkup:
     rows = []
     for c in categories:
@@ -52,6 +89,10 @@ def admin_categories_keyboard(categories) -> InlineKeyboardMarkup:
                     text=f"{mark} {c.icon or ''} {c.name}", callback_data=f"admin:category:toggle:{c.id}"
                 ),
                 InlineKeyboardButton(text=size_mark, callback_data=f"admin:category:columns:{c.id}"),
+                InlineKeyboardButton(
+                    text=style_label(getattr(c, "button_style", None), "success"),
+                    callback_data=f"admin:category:style:{c.id}",
+                ),
                 InlineKeyboardButton(text="🗑", callback_data=f"admin:category:del:{c.id}"),
             ]
         )
@@ -131,6 +172,11 @@ def admin_product_detail_keyboard(product, is_featured: bool = False) -> InlineK
             [InlineKeyboardButton(text=token_label, callback_data=f"admin:product:token_price:{product.id}", style=ButtonStyle.PRIMARY)],
             [InlineKeyboardButton(text=mark, callback_data=f"admin:product:toggle:{product.id}", style=ButtonStyle.SUCCESS if not product.status else ButtonStyle.DANGER)],
             [InlineKeyboardButton(text=size_label, callback_data=f"admin:product:columns:{product.id}", style=ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton(
+                text=f"🎨 رنگ دکمه: {style_label(getattr(product, 'button_style', None), 'primary')}",
+                callback_data=f"admin:product:style:{product.id}",
+                style=ButtonStyle.PRIMARY,
+            )],
             [
                 InlineKeyboardButton(text="⬆️ بالاتر", callback_data=f"admin:product:up:{product.id}", style=ButtonStyle.PRIMARY),
                 InlineKeyboardButton(text="⬇️ پایین‌تر", callback_data=f"admin:product:down:{product.id}", style=ButtonStyle.PRIMARY),
