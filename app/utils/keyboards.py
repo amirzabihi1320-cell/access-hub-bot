@@ -12,11 +12,11 @@ from aiogram.types import InlineKeyboardButton
 
 DEFAULT_COLUMNS = 1
 MIN_COLUMNS = 1
-MAX_COLUMNS = 3
+MAX_COLUMNS = 2
 
 
 def clamp_columns(value: int | str | None) -> int:
-    """مقدار خام تنظیمات را به یک عدد معتبر بین ۱ تا ۳ تبدیل می‌کند."""
+    """مقدار خام تنظیمات را به یک عدد معتبر بین ۱ تا ۲ تبدیل می‌کند."""
     try:
         columns = int(value)
     except (TypeError, ValueError):

@@ -3,6 +3,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 class AdminStates(StatesGroup):
     WAITING_NEW_PRICE = State()
+    WAITING_NEW_TOKEN_PRICE = State()
     WAITING_SETTING_VALUE = State()
 
     WAITING_CATEGORY_NAME = State()

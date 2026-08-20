@@ -36,6 +36,10 @@ class Product(Base):
     # 2 = دو دکمه کنار هم
     button_columns: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
+    # قیمت اختیاری محصول با Access Token. برای FIXED قیمت کل محصول
+    # و برای VARIABLE_QUANTITY قیمت هر واحد است. مقدار None یعنی خرید Token فعال نیست.
+    token_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     # تخفیف زمان‌دار (اختیاری). وقتی discount_percent ست شده و هنوز به
     # discount_expires_at نرسیده باشیم، قیمت نمایشی/نهایی تخفیف می‌خورد.
     discount_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)

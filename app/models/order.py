@@ -20,6 +20,11 @@ class Order(Base):
     unit_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
     final_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
+    # روش پرداخت سفارش: WALLET یا TOKEN
+    payment_method: Mapped[str] = mapped_column(String(16), nullable=False, default="WALLET")
+    token_unit_price: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    token_total: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=OrderStatus.PENDING.value)
     delivery_type: Mapped[str] = mapped_column(String(16), nullable=False, default="MANUAL")
     delivery_data: Mapped[str | None] = mapped_column(Text, nullable=True)  # کد تحویلی یا یادداشت ادمین

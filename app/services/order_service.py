@@ -21,6 +21,7 @@ from app.models.user import User
 from app.services.pricing_service import calculate_price
 from app.services.settings_service import SettingsService
 from app.services.wallet_service import WalletService
+from app.services.game_service import InsufficientTokenError, TokenService
 
 class OrderAlreadyProcessedError(Exception):
     """این سفارش قبلاً تحویل داده شده یا در وضعیت دیگری است."""
@@ -94,6 +95,50 @@ class OrderService:
                             reference_id=f"referral-cashback:order:{order.id}",
                             description=f"پاداش رفرال از خرید {product.name}",
                         )
+
+        await self.session.commit()
+        await self.session.refresh(order)
+        return order
+
+    async def create_and_pay_token(self, user_id: int, product_id: int, quantity: int) -> Order:
+        """ساخت سفارش و پرداخت کامل با Access Token."""
+        product = await self.session.get(Product, product_id)
+        if not product or not product.status:
+            raise ProductUnavailableError("این محصول در دسترس نیست.")
+        if not product.token_price or product.token_price <= 0:
+            raise ValueError("خرید این محصول با Token فعال نیست.")
+
+        price = calculate_price(product, quantity)
+        token_unit_price = int(product.token_price)
+        token_total = token_unit_price if product.product_type == "FIXED" else token_unit_price * price.quantity
+
+        order = Order(
+            user_id=user_id,
+            product_id=product_id,
+            quantity=price.quantity,
+            unit_price=token_unit_price,
+            final_price=0,
+            payment_method="TOKEN",
+            token_unit_price=token_unit_price,
+            token_total=token_total,
+            status=OrderStatus.PENDING.value,
+            delivery_type="MANUAL",
+        )
+        self.session.add(order)
+        await self.session.flush()
+        order.order_number = f"AH-{order.id:06d}"
+
+        await TokenService(self.session).debit(
+            user_id=user_id,
+            amount=token_total,
+            type_="product_purchase",
+            reference_id=f"order:{order.id}",
+            description=f"خرید {product.name} با Token",
+        )
+
+        order.status = OrderStatus.WAITING_ADMIN.value
+        user = await self.session.get(User, user_id)
+        user.total_purchases += 1
 
         await self.session.commit()
         await self.session.refresh(order)
@@ -193,11 +238,16 @@ def build_order_report_text(order: Order, product_name: str) -> str:
         OrderStatus.PAID.value: "✅ پرداخت شد",
     }
     status_text = status_labels.get(order.status, order.status)
+    if order.payment_method == "TOKEN":
+        payment_text = f"پرداخت: {order.token_total or 0:,} Token"
+    else:
+        payment_text = f"مبلغ: {order.final_price:,} تومان"
+
     return (
         "🛍 <b>سفارش جدید</b>\n\n"
         f"محصول:\n{product_name}\n\n"
         f"تعداد: {order.quantity}\n"
-        f"مبلغ: {order.final_price:,} تومان\n\n"
+        f"{payment_text}\n\n"
         f"Order:\n#{order.order_number}\n\n"
         f"وضعیت:\n{status_text}"
     )

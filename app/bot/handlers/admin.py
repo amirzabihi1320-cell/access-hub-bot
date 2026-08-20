@@ -142,6 +142,12 @@ async def _product_detail_view(session, product) -> tuple[str, InlineKeyboardMar
     price = product.fixed_price if product.product_type == "FIXED" else product.unit_price
     status_label = "🟢 فعال" if product.status else "🔴 غیرفعال"
     text = f"🛍 <b>{product.name}</b>\n\nقیمت: {price:,} تومان\nوضعیت: {status_label}"
+    if product.token_price:
+        token_text = (
+            f"{product.token_price:,} Token" if product.product_type == "FIXED"
+            else f"{product.token_price:,} Token برای هر واحد"
+        )
+        text += f"\n🪙 قیمت Token: {token_text}"
 
     if is_discount_active(product):
         discounted, _ = apply_discount(product, price)
@@ -252,6 +258,49 @@ async def handle_admin_product_price_value(message: Message, state: FSMContext) 
             return
     await state.clear()
     await message.answer(f"✅ قیمت «{product.name}» به‌روزرسانی شد: {int(raw):,} تومان")
+
+
+@router.callback_query(F.data.startswith("admin:product:token_price:"))
+async def handle_admin_product_token_price_start(callback: CallbackQuery, state: FSMContext) -> None:
+    product_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+    if not product:
+        await callback.answer("محصول پیدا نشد.", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.WAITING_NEW_TOKEN_PRICE)
+    await state.update_data(product_id=product_id)
+    current = f"\nقیمت فعلی: {product.token_price:,} Token" if product.token_price else "\nخرید با Token فعلاً غیرفعال است."
+    await callback.message.edit_text(
+        "🪙 قیمت Token این محصول را وارد کنید.\n"
+        "برای غیرفعال‌کردن خرید با Token عدد 0 را بفرستید." + current,
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_NEW_TOKEN_PRICE, F.text)
+async def handle_admin_product_token_price_value(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    raw = message.text.strip().replace(",", "")
+    if not raw.isdigit() or int(raw) < 0:
+        await message.answer("❗️ عدد صحیح و صفر یا بیشتر وارد کنید.")
+        return
+
+    data = await state.get_data()
+    product_id = data.get("product_id")
+    value = int(raw)
+    async with get_session() as session:
+        try:
+            product = await ProductService(session).update_token_price(product_id, None if value == 0 else value)
+            text, keyboard = await _product_detail_view(session, product)
+        except ValueError as e:
+            await message.answer(f"❌ {e}")
+            return
+    await state.clear()
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.callback_query(F.data.startswith("admin:product:del:"))

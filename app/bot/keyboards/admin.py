@@ -1,3 +1,4 @@
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.services.pricing_service import is_discount_active
@@ -121,21 +122,23 @@ def admin_product_type_pick_keyboard() -> InlineKeyboardMarkup:
 def admin_product_detail_keyboard(product, is_featured: bool = False) -> InlineKeyboardMarkup:
     mark = "🔴 غیرفعال کن" if product.status else "🟢 فعال کن"
     size_label = "📏 نمایش: تمام‌عرض (تغییر به دو ستون)" if product.button_columns == 1 else "↔️ نمایش: دو ستون (تغییر به تمام‌عرض)"
+    token_label = f"🪙 قیمت Token: {product.token_price:,}" if product.token_price else "🪙 فعال‌سازی خرید با Token"
     discount_label = "❌ لغو تخفیف زمان‌دار" if is_discount_active(product) else "🔥 تخفیف زمان‌دار"
     pin_label = "📌 برداشتن از پیشنهاد ویژه" if is_featured else "📌 پین به‌عنوان پیشنهاد ویژه"
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="💰 تغییر قیمت", callback_data=f"admin:product:price:{product.id}")],
-            [InlineKeyboardButton(text=mark, callback_data=f"admin:product:toggle:{product.id}")],
-            [InlineKeyboardButton(text=size_label, callback_data=f"admin:product:columns:{product.id}")],
+            [InlineKeyboardButton(text="💰 تغییر قیمت تومان", callback_data=f"admin:product:price:{product.id}", style=ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton(text=token_label, callback_data=f"admin:product:token_price:{product.id}", style=ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton(text=mark, callback_data=f"admin:product:toggle:{product.id}", style=ButtonStyle.SUCCESS if not product.status else ButtonStyle.DANGER)],
+            [InlineKeyboardButton(text=size_label, callback_data=f"admin:product:columns:{product.id}", style=ButtonStyle.PRIMARY)],
             [
-                InlineKeyboardButton(text="⬆️ بالاتر", callback_data=f"admin:product:up:{product.id}"),
-                InlineKeyboardButton(text="⬇️ پایین‌تر", callback_data=f"admin:product:down:{product.id}"),
+                InlineKeyboardButton(text="⬆️ بالاتر", callback_data=f"admin:product:up:{product.id}", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton(text="⬇️ پایین‌تر", callback_data=f"admin:product:down:{product.id}", style=ButtonStyle.PRIMARY),
             ],
-            [InlineKeyboardButton(text=discount_label, callback_data=f"admin:product:discount:{product.id}")],
-            [InlineKeyboardButton(text=pin_label, callback_data=f"admin:product:pin:{product.id}")],
-            [InlineKeyboardButton(text="🗑 حذف محصول", callback_data=f"admin:product:del:{product.id}")],
-            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products")],
+            [InlineKeyboardButton(text=discount_label, callback_data=f"admin:product:discount:{product.id}", style=ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton(text=pin_label, callback_data=f"admin:product:pin:{product.id}", style=ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton(text="🗑 حذف محصول", callback_data=f"admin:product:del:{product.id}", style=ButtonStyle.DANGER)],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products", style=ButtonStyle.DANGER)],
         ]
     )
 
@@ -196,12 +199,14 @@ def button_columns_keyboard(back_callback: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="📏 تمام‌عرض",
                     callback_data="layout:columns:1",
+                    style=ButtonStyle.SUCCESS,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="↔️ دو دکمه کنار هم",
                     callback_data="layout:columns:2",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
             [

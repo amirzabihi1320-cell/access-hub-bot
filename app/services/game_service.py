@@ -41,7 +41,7 @@ class TokenService:
         user.token_balance = after
         if type_ == "purchase":
             user.total_tokens_purchased += amount
-        elif type_ == "game_entry":
+        elif type_ in {"game_entry", "product_purchase"}:
             user.total_tokens_spent += -amount
         elif type_ == "game_win":
             user.total_tokens_won += amount

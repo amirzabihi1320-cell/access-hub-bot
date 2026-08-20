@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+from aiogram.enums import ButtonStyle
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,7 @@ from app.services.product_service import ProductService
 from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.services.wallet_service import InsufficientBalanceError
+from app.services.game_service import InsufficientTokenError
 from app.utils.message_manager import MessageManager
 
 router = Router(name="shop")
@@ -31,6 +33,14 @@ def _format_dt(dt: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _token_total(product, quantity: int = 1) -> int | None:
+    if not product.token_price or product.token_price <= 0:
+        return None
+    if product.product_type == "FIXED":
+        return int(product.token_price)
+    return int(product.token_price) * quantity
 
 
 # قفل درون‌حافظه‌ای برای جلوگیری از دوبار کلیک روی پرداخت قبل از تمام‌شدن
@@ -133,6 +143,13 @@ async def handle_product_detail(callback: CallbackQuery) -> None:
             f"حداقل: {product.min_quantity or 1} | حداکثر: {product.max_quantity or '∞'}"
         )
 
+    if product.token_price:
+        token_label = (
+            f"{product.token_price:,} Token" if product.product_type == "FIXED"
+            else f"{product.token_price:,} Token برای هر واحد"
+        )
+        text += f"\n🪙 قیمت با Token: <b>{token_label}</b>"
+
     await callback.message.edit_text(text, reply_markup=product_detail_keyboard(product))
     await callback.answer()
 
@@ -194,17 +211,107 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
         f"{product.name} — {result.quantity} عدد\n\n"
         f"قیمت نهایی:\n<b>{result.total_price:,} تومان</b>"
     )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(
-                text="✅ پرداخت با کیف پول",
-                callback_data=f"shop:buy:{product.id}:{result.quantity}",
-            )],
-            [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"shop:category:{product.category_id}")],
-        ]
-    )
+    rows = [[InlineKeyboardButton(
+        text="💳 پرداخت با کیف پول",
+        callback_data=f"shop:buy:{product.id}:{result.quantity}",
+        style=ButtonStyle.SUCCESS,
+    )]]
+    token_total = _token_total(product, result.quantity)
+    if token_total:
+        rows.append([InlineKeyboardButton(
+            text=f"🪙 پرداخت با Token — {token_total:,}",
+            callback_data=f"shop:buy_token:{product.id}:{result.quantity}",
+            style=ButtonStyle.PRIMARY,
+        )])
+    rows.append([InlineKeyboardButton(
+        text="🔙 بازگشت",
+        callback_data=f"shop:category:{product.category_id}",
+        style=ButtonStyle.DANGER,
+    )])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     await manager.send(text, reply_markup=keyboard)
     await state.clear()
+
+
+@router.callback_query(F.data.startswith("shop:buy_token:"))
+async def handle_buy_token(callback: CallbackQuery, state: FSMContext) -> None:
+    user_id = callback.from_user.id
+    if user_id in _processing_purchases:
+        await callback.answer("⏳ درخواست قبلی در حال پردازش است.", show_alert=True)
+        return
+
+    _processing_purchases.add(user_id)
+    try:
+        parts = callback.data.split(":")
+        product_id, quantity = int(parts[2]), int(parts[3])
+
+        async with get_session() as session:
+            user = await UserService(session).get_or_create(
+                user_id, callback.from_user.username, callback.from_user.first_name,
+                callback.from_user.last_name,
+            )
+            product = await ProductService(session).get(product_id)
+            if not product or not product.status:
+                await callback.answer("❌ این محصول در دسترس نیست.", show_alert=True)
+                return
+            try:
+                order = await OrderService(session).create_and_pay_token(user.id, product_id, quantity)
+            except InsufficientTokenError:
+                balance = user.token_balance
+                required = _token_total(product, quantity) or 0
+                await callback.answer(
+                    f"❌ موجودی Token کافی نیست.\nنیاز: {required:,} | موجودی: {balance:,}",
+                    show_alert=True,
+                )
+                return
+            except (ProductUnavailableError, InvalidQuantityError, ValueError) as e:
+                await callback.answer(f"❌ {e}", show_alert=True)
+                return
+
+        token_total = order.token_total or 0
+        await callback.message.edit_text(
+            f"✅ <b>پرداخت با Token موفق بود</b>\n\n"
+            f"{product.name} — {token_total:,} Token\n"
+            f"شماره سفارش: #{order.order_number}\n\n"
+            "سفارش شما برای آماده‌سازی ارسال شد.",
+        )
+        await callback.answer()
+
+        username = f"@{callback.from_user.username}" if callback.from_user.username else "—"
+        admin_text = (
+            "🛍 <b>سفارش جدید</b>\n\n"
+            f"کاربر: {username}\n"
+            f"محصول: {product.name}\n"
+            f"تعداد: {order.quantity}\n"
+            f"پرداخت: {token_total:,} Token\n"
+            f"سفارش: #{order.order_number}"
+        )
+        for admin_id in settings.admin_ids:
+            try:
+                await callback.bot.send_message(
+                    chat_id=admin_id,
+                    text=admin_text,
+                    reply_markup=admin_order_deliver_keyboard(order.id),
+                )
+            except Exception:
+                continue
+
+        try:
+            async with get_session() as session:
+                report_enabled = await SettingsService(session).is_order_report_enabled()
+        except Exception:
+            report_enabled = True
+
+        if report_enabled:
+            try:
+                await callback.bot.send_message(
+                    chat_id=settings.report_channel_id,
+                    text=build_order_report_text(order, product.name),
+                )
+            except Exception:
+                pass
+    finally:
+        _processing_purchases.discard(user_id)
 
 
 @router.callback_query(F.data.startswith("shop:buy:"))
@@ -254,7 +361,7 @@ async def handle_buy(callback: CallbackQuery, state: FSMContext) -> None:
             f"کاربر: {username}\n"
             f"محصول: {product.name}\n"
             f"تعداد: {order.quantity}\n"
-            f"مبلغ: {order.final_price:,} تومان\n"
+            f"پرداخت: {order.final_price:,} تومان\n"
             f"سفارش: #{order.order_number}"
         )
         for admin_id in settings.admin_ids:

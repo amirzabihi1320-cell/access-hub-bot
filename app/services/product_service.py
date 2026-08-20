@@ -85,6 +85,17 @@ class ProductService:
         await self.session.commit()
         return product
 
+    async def update_token_price(self, product_id: int, new_price: int | None) -> Product:
+        """تنظیم/حذف قیمت محصول با Access Token."""
+        if new_price is not None and new_price <= 0:
+            raise ValueError("قیمت Token باید مثبت باشد.")
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+        product.token_price = new_price
+        await self.session.commit()
+        return product
+
     async def _next_sort_order(self, category_id: int) -> int:
         result = await self.session.execute(
             select(func.coalesce(func.max(Product.sort_order), -1)).where(Product.category_id == category_id)
