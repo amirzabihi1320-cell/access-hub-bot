@@ -36,6 +36,8 @@ async def seed_initial_data() -> None:
             description="سرویس‌های AI",
             status=True,
             sort_order=1,
+            button_columns=1,
+            button_style="success",
         )
 
         session.add(category)
@@ -50,6 +52,8 @@ async def seed_initial_data() -> None:
             fixed_price=2_490_000,
             status=True,
             sort_order=1,
+            button_columns=1,
+            button_style="primary",
         )
 
         product_token = Product(
@@ -67,6 +71,8 @@ async def seed_initial_data() -> None:
             max_quantity=None,
             status=True,
             sort_order=2,
+            button_columns=1,
+            button_style="success",
         )
 
         session.add_all([product_fixed, product_token])

@@ -315,7 +315,7 @@ async def handle_admin_product_style_entry(callback: CallbackQuery) -> None:
         return
     await callback.message.edit_text(
         f"🎨 رنگ دکمه «{product.name}» را انتخاب کنید:",
-        reply_markup=admin_product_style_keyboard(product_id),
+        reply_markup=admin_product_style_keyboard(product_id, product.button_style),
     )
     await callback.answer()
 
@@ -756,7 +756,7 @@ async def handle_admin_category_style_entry(callback: CallbackQuery) -> None:
         return
     await callback.message.edit_text(
         f"🎨 رنگ دکمه «{category.name}» را انتخاب کنید:",
-        reply_markup=admin_category_style_keyboard(category_id),
+        reply_markup=admin_category_style_keyboard(category_id, category.button_style),
     )
     await callback.answer()
 

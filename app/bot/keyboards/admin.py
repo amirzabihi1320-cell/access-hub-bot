@@ -52,26 +52,32 @@ def style_label(style: str | None, default: str) -> str:
     return STYLE_LABELS.get((style or "").lower(), STYLE_LABELS[default])
 
 
-def admin_category_style_keyboard(category_id: int) -> InlineKeyboardMarkup:
+def admin_category_style_keyboard(category_id: int, current: str | None = None) -> InlineKeyboardMarkup:
+    current = (current or "success").lower()
+    def mark(style: str) -> str:
+        return "✅ " if current == style else ""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🔵 آبی", callback_data=f"admin:category:style:{category_id}:primary", style=ButtonStyle.PRIMARY),
-                InlineKeyboardButton(text="🟢 سبز", callback_data=f"admin:category:style:{category_id}:success", style=ButtonStyle.SUCCESS),
-                InlineKeyboardButton(text="🔴 قرمز", callback_data=f"admin:category:style:{category_id}:danger", style=ButtonStyle.DANGER),
+                InlineKeyboardButton(text=f"{mark('primary')}🔵 آبی", callback_data=f"admin:category:style:{category_id}:primary", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton(text=f"{mark('success')}🟢 سبز", callback_data=f"admin:category:style:{category_id}:success", style=ButtonStyle.SUCCESS),
+                InlineKeyboardButton(text=f"{mark('danger')}🔴 قرمز", callback_data=f"admin:category:style:{category_id}:danger", style=ButtonStyle.DANGER),
             ],
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:categories")],
         ]
     )
 
 
-def admin_product_style_keyboard(product_id: int) -> InlineKeyboardMarkup:
+def admin_product_style_keyboard(product_id: int, current: str | None = None) -> InlineKeyboardMarkup:
+    current = (current or "primary").lower()
+    def mark(style: str) -> str:
+        return "✅ " if current == style else ""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🔵 آبی", callback_data=f"admin:product:style:{product_id}:primary", style=ButtonStyle.PRIMARY),
-                InlineKeyboardButton(text="🟢 سبز", callback_data=f"admin:product:style:{product_id}:success", style=ButtonStyle.SUCCESS),
-                InlineKeyboardButton(text="🔴 قرمز", callback_data=f"admin:product:style:{product_id}:danger", style=ButtonStyle.DANGER),
+                InlineKeyboardButton(text=f"{mark('primary')}🔵 آبی", callback_data=f"admin:product:style:{product_id}:primary", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton(text=f"{mark('success')}🟢 سبز", callback_data=f"admin:product:style:{product_id}:success", style=ButtonStyle.SUCCESS),
+                InlineKeyboardButton(text=f"{mark('danger')}🔴 قرمز", callback_data=f"admin:product:style:{product_id}:danger", style=ButtonStyle.DANGER),
             ],
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products")],
         ]

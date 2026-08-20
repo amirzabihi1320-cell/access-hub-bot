@@ -79,23 +79,52 @@ def products_keyboard(
     category_id: int,
     columns: int = DEFAULT_COLUMNS,
 ) -> InlineKeyboardMarkup:
-    rows = _mixed_columns_buttons(
-        products,
-        lambda product: InlineKeyboardButton(
-            text=f"🛍 {product.name}",
-            callback_data=f"shop:product:{product.id}",
-            style=button_style(getattr(product, "button_style", None), ButtonStyle.PRIMARY),
-        ),
-        columns,
-    )
+    """
+    فهرست فروشگاه را به‌صورت واقعیِ قابل خرید می‌سازد.
 
-    rows.append(
-        [InlineKeyboardButton(
-            text="🔙 بازگشت",
-            callback_data="menu:shop",
-            style=ButtonStyle.DANGER,
-        )]
-    )
+    هر محصول یک ردیف نام/انتخاب دارد و در صورت فعال بودن قیمت‌ها،
+    دکمه‌های پرداخت ریالی و توکنی نیز همان‌جا نمایش داده می‌شوند.
+    برای محصول VARIABLE_QUANTITY ابتدا باید تعداد انتخاب شود.
+    """
+    rows = []
+    for product in products:
+        # دکمه اصلی محصول: تعداد ستون انتخاب‌شده توسط ادمین را رعایت می‌کند.
+        rows.extend(_mixed_columns_buttons(
+            [product],
+            lambda item: InlineKeyboardButton(
+                text=f"🛍 {item.name}",
+                callback_data=f"shop:product:{item.id}",
+                style=button_style(getattr(item, "button_style", None), ButtonStyle.PRIMARY),
+            ),
+            getattr(product, "button_columns", columns),
+        ))
+
+        if product.product_type == "FIXED":
+            rial_price = product.fixed_price
+            if rial_price is not None:
+                rows.append([InlineKeyboardButton(
+                    text=f"💳 پرداخت ریالی — {rial_price:,} تومان",
+                    callback_data=f"shop:buy:{product.id}:1",
+                    style=ButtonStyle.SUCCESS,
+                )])
+            if product.token_price and product.token_price > 0:
+                rows.append([InlineKeyboardButton(
+                    text=f"🪙 پرداخت توکنی — {product.token_price:,} Token",
+                    callback_data=f"shop:buy_token:{product.id}:1",
+                    style=ButtonStyle.PRIMARY,
+                )])
+        else:
+            rows.append([InlineKeyboardButton(
+                text="🔢 انتخاب تعداد و پرداخت",
+                callback_data=f"shop:enter_qty:{product.id}",
+                style=ButtonStyle.SUCCESS,
+            )])
+
+    rows.append([InlineKeyboardButton(
+        text="🔙 بازگشت",
+        callback_data="menu:shop",
+        style=ButtonStyle.DANGER,
+    )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
