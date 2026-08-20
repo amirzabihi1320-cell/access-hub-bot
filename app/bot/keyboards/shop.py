@@ -12,6 +12,23 @@ STYLE_MAP = {
     "danger": ButtonStyle.DANGER,
 }
 
+# Telegram Bot API برای InlineKeyboardButton عرض/ارتفاع پیکسلی مستقیم ندارد.
+# برای فروشگاه، اندازه بصری دکمه‌ها را عمداً بزرگ می‌کنیم: یک حداقل عرض
+# ثابت با EM SPACE و یک خط دومِ نامرئی باعث می‌شود دکمه روی موبایل هم
+# حدوداً دو برابر بزرگ‌تر از حالت قبلی دیده شود.
+_EM_SPACE = "\u2003"
+_BLANK = "\u2800"
+
+
+def _large_shop_button_text(text: str, min_width: int = 30) -> str:
+    text = str(text).strip()
+    # طول تقریبی متن برای جلوگیری از دکمه‌های بیش از حد پهن
+    current = len(text)
+    padding = max(5, (min_width - current) // 2)
+    side = _EM_SPACE * padding
+    # خط دوم با کاراکتر خالیِ قابل‌عرض برای افزایش ارتفاع دکمه
+    return f"{side}{text}{side}\n{_BLANK * 8}"
+
 
 def button_style(value: str | None, default: ButtonStyle) -> ButtonStyle:
     return STYLE_MAP.get((value or "").lower(), default)
@@ -66,7 +83,7 @@ def categories_keyboard(
     rows = _mixed_columns_buttons(
         categories,
         lambda cat: InlineKeyboardButton(
-            text=f"{cat.icon or '📦'} {cat.name}",
+            text=_large_shop_button_text(f"{cat.icon or '📦'} {cat.name}", min_width=30),
             callback_data=f"shop:category:{cat.id}",
             style=button_style(getattr(cat, "button_style", None), ButtonStyle.SUCCESS),
         ),
@@ -96,7 +113,7 @@ def products_keyboard(
 
     for product in products:
         product_button = InlineKeyboardButton(
-            text=f"🛍 {product.name}",
+            text=_large_shop_button_text(f"🛍 {product.name}", min_width=32),
             callback_data=f"shop:product:{product.id}",
             style=button_style(getattr(product, "button_style", None), ButtonStyle.PRIMARY),
         )

@@ -148,3 +148,4 @@ Handler فقط پیام تلگرام را می‌گیرد → Service را صد�
 - Category and product buttons support `primary` (blue), `success` (green), and `danger` (red).
 - Admin can change each item's button color from its management screen.
 - Button layout remains per-item: full-width (1) or two columns (2).
+- Shop category/product buttons use an enlarged two-line visual style so their rendered size is substantially larger on Telegram mobile; Telegram does not expose pixel width/height for InlineKeyboardButton.

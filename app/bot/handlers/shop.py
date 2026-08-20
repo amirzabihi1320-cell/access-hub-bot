@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.keyboards.orders import admin_order_deliver_keyboard
-from app.bot.keyboards.shop import categories_keyboard, product_detail_keyboard, products_keyboard
+from app.bot.keyboards.shop import _large_shop_button_text, categories_keyboard, product_detail_keyboard, products_keyboard
 from app.bot.states.shop_states import ProductQuantityStates
 from app.config.settings import get_settings
 from app.database.base import get_session
@@ -66,7 +66,7 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
             if is_discount_active(featured):
                 price, _ = apply_discount(featured, price)
             header = f"🔥 <b>پیشنهاد ویژه: {featured.name}</b> — {price:,} تومان\n\n🛍 دسته‌بندی‌ها"
-            extra_row = [InlineKeyboardButton(text=f"🔥 {featured.name}", callback_data=f"shop:product:{featured.id}")]
+            extra_row = [InlineKeyboardButton(text=_large_shop_button_text(f"🔥 {featured.name}", min_width=32), callback_data=f"shop:product:{featured.id}")]
 
     category_columns_raw = await SettingsService(session).get("shop_category_button_columns", "1")
     try:
