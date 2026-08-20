@@ -20,6 +20,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "referral_cashback_percent": "0",
     # آیدی محصولی که به‌عنوان «پیشنهاد ویژه» بالای فروشگاه پین می‌شود؛ خالی = چیزی پین نیست.
     "featured_product_id": "",
+    # چیدمان دکمه‌های فروشگاه: 1=تمام‌عرض، 2=دو ستون
+    "shop_category_button_columns": "1",
+    "shop_product_button_columns": "1",
+    # قیمت هر Token هنگام خرید Token
+    "token_purchase_price": "40",
 }
 
 

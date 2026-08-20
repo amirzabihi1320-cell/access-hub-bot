@@ -68,7 +68,13 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
             header = f"🔥 <b>پیشنهاد ویژه: {featured.name}</b> — {price:,} تومان\n\n🛍 دسته‌بندی‌ها"
             extra_row = [InlineKeyboardButton(text=f"🔥 {featured.name}", callback_data=f"shop:product:{featured.id}")]
 
-    keyboard = categories_keyboard(categories, 1)
+    category_columns_raw = await SettingsService(session).get("shop_category_button_columns", "1")
+    try:
+        category_columns = int(category_columns_raw or 1)
+    except (TypeError, ValueError):
+        category_columns = 1
+    category_columns = 1 if category_columns not in (1, 2) else category_columns
+    keyboard = categories_keyboard(categories, category_columns, force_columns=True)
     if extra_row:
         keyboard.inline_keyboard.insert(0, extra_row)
 
@@ -102,8 +108,16 @@ async def handle_category(callback: CallbackQuery) -> None:
         return
 
     title = category.name if category else "محصولات"
+    async with get_session() as session:
+        product_columns_raw = await SettingsService(session).get("shop_product_button_columns", "1")
+    try:
+        product_columns = int(product_columns_raw or 1)
+    except (TypeError, ValueError):
+        product_columns = 1
+    product_columns = 1 if product_columns not in (1, 2) else product_columns
     await callback.message.edit_text(
-        f"📂 {title}:", reply_markup=products_keyboard(products, category_id, 1)
+        f"📂 {title}:",
+        reply_markup=products_keyboard(products, category_id, product_columns, force_columns=True),
     )
     await callback.answer()
 

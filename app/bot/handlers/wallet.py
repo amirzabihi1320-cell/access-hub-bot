@@ -195,10 +195,18 @@ async def handle_token_deposit_start(
         DepositStates.WAITING_AMOUNT
     )
 
+    async with get_session() as session:
+        token_price_raw = await SettingsService(session).get("token_purchase_price", "40")
+    try:
+        token_price = int(token_price_raw or 40)
+    except (TypeError, ValueError):
+        token_price = 40
+
+    await state.update_data(token_purchase_price=token_price)
     await callback.message.edit_text(
         "🪙 <b>شارژ Access Token</b>\n\n"
         "تعداد Token مورد نظر را وارد کنید.\n\n"
-        "💰 قیمت هر 1 Token = 40 تومان\n"
+        f"💰 قیمت هر 1 Token = {token_price:,} تومان\n"
         "📌 حداقل خرید: 500 Token\n"
         "♾ حداکثر خرید: ندارد\n\n"
         "تعداد دلخواه خود را وارد کنید (مثلاً 777 یا 2500).\n"
@@ -255,9 +263,14 @@ async def handle_deposit_amount(
             return
 
         token_amount = value
-        amount = token_amount * 40
 
         async with get_session() as session:
+            token_price_raw = await SettingsService(session).get("token_purchase_price", "40")
+            try:
+                token_price = int(token_price_raw or 40)
+            except (TypeError, ValueError):
+                token_price = 40
+            amount = token_amount * token_price
             payment_info = await SettingsService(session).get("payment_info") or "اطلاعات پرداخت ثبت نشده است."
 
         await state.update_data(
@@ -269,7 +282,7 @@ async def handle_deposit_amount(
         text = (
             "🪙 <b>شارژ Access Token</b>\n\n"
             f"تعداد Token: <b>{token_amount:,}</b>\n"
-            f"قیمت هر Token: <b>40 تومان</b>\n"
+            f"قیمت هر Token: <b>{token_price:,} تومان</b>\n"
             f"مبلغ قابل پرداخت: <b>{amount:,} تومان</b>\n\n"
             "💳 <b>اطلاعات پرداخت</b>\n\n"
             f"{payment_info}\n"

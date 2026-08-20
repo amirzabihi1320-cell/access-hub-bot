@@ -8,6 +8,9 @@ EDITABLE_SETTINGS = {
     "payment_info": "💳 اطلاعات پرداخت",
     "token_transfer_fee_percent": "💎 کارمزد انتقال Token (%)",
     "referral_cashback_percent": "👥 درصد پاداش رفرال (کش‌بک معرف)",
+    "token_purchase_price": "🪙 قیمت خرید هر Token (تومان)",
+    "shop_category_button_columns": "📂 چیدمان دکمه دسته‌بندی (۱/۲)",
+    "shop_product_button_columns": "🛍 چیدمان دکمه محصول (۱/۲)",
 }
 
 

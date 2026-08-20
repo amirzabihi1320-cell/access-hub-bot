@@ -1013,6 +1013,16 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
             await message.answer("❗️ درصد پاداش رفرال باید عددی بین ۰ تا ۵۰ باشد.")
             return
 
+    if key == "token_purchase_price":
+        if not value.isdigit() or int(value) <= 0:
+            await message.answer("❗️ قیمت هر Token باید یک عدد صحیح و مثبت باشد.")
+            return
+
+    if key in {"shop_category_button_columns", "shop_product_button_columns"}:
+        if value not in {"1", "2"}:
+            await message.answer("❗️ فقط ۱ یا ۲ وارد کنید.\n۱ = یک دکمه در هر ردیف\n۲ = دو دکمه در هر ردیف")
+            return
+
     async with get_session() as session:
         await SettingsService(session).set(key, value)
     await state.clear()
