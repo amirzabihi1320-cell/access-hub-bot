@@ -16,24 +16,27 @@ EDITABLE_SETTINGS = {
 
 
 def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
+    """
+    پنل اصلی ادمین را عمداً مثل دکمه‌های فروشگاه تمام‌عرض می‌چیند.
+
+    قبلاً دو دکمه در هر ردیف قرار می‌گرفت و هر دکمه تقریباً نصف عرض صفحه را
+    می‌گرفت. در تلگرام عرض پیکسلی InlineKeyboardButton قابل تعیین نیست؛
+    بنابراین برای رسیدن به ظاهر بزرگ و عریض، هر دکمه باید در یک ردیف مستقل باشد.
+    """
+    buttons = [
+        ("🛍 محصولات", "admin:products"),
+        ("📂 دسته‌بندی‌ها", "admin:categories"),
+        ("💳 درخواست‌های شارژ", "admin:deposits"),
+        ("📦 سفارش‌های در انتظار", "admin:orders"),
+        ("📢 عضویت اجباری", "admin:channels"),
+        ("⚙️ تنظیمات", "admin:settings"),
+        ("🏆 تورنومنت‌ها", "admin:tournaments"),
+        ("📊 آمار فروش", "admin:stats"),
+    ]
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🛍 محصولات", callback_data="admin:products"),
-                InlineKeyboardButton(text="📂 دسته‌بندی‌ها", callback_data="admin:categories"),
-            ],
-            [
-                InlineKeyboardButton(text="💳 درخواست‌های شارژ", callback_data="admin:deposits"),
-                InlineKeyboardButton(text="📦 سفارش‌های در انتظار", callback_data="admin:orders"),
-            ],
-            [
-                InlineKeyboardButton(text="📢 عضویت اجباری", callback_data="admin:channels"),
-                InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings"),
-            ],
-            [
-                InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments"),
-                InlineKeyboardButton(text="📊 آمار فروش", callback_data="admin:stats"),
-            ],
+            [InlineKeyboardButton(text=text, callback_data=callback)]
+            for text, callback in buttons
         ]
     )
 

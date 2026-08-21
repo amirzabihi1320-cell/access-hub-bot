@@ -16,18 +16,30 @@ STYLE_MAP = {
 # برای فروشگاه، اندازه بصری دکمه‌ها را عمداً بزرگ می‌کنیم: یک حداقل عرض
 # ثابت با EM SPACE و یک خط دومِ نامرئی باعث می‌شود دکمه روی موبایل هم
 # حدوداً دو برابر بزرگ‌تر از حالت قبلی دیده شود.
-_EM_SPACE = "\u2003"
-_BLANK = "\u2800"
-
+# Telegram Bot API برای InlineKeyboardButton عرض/ارتفاع پیکسلی مستقیم ندارد.
+# برای فروشگاه، دکمه‌های دسته‌بندی و انتخاب محصول را به‌صورت «دو خطی»
+# می‌سازیم؛ این تغییر واقعی در ظاهر است و ارتفاع دکمه را روی کلاینت‌های
+# موبایل به‌طور محسوسی (تقریباً دو برابر) بیشتر می‌کند.
+# خط اول = آیکن، خط دوم = عنوان.
 
 def _large_shop_button_text(text: str, min_width: int = 30) -> str:
+    """متن دکمه‌های فروشگاه با ظاهر دوخطی و ارتفاع بزرگ‌تر.
+
+    Telegram برای InlineKeyboardButton گزینه width/height پیکسلی ندارد؛
+    بنابراین بزرگ‌کردن واقعیِ ظاهر با یک چیدمان دوخطی انجام می‌شود،
+    نه با تغییر یک عدد بی‌اثر.
+    """
     text = str(text).strip()
-    # طول تقریبی متن برای جلوگیری از دکمه‌های بیش از حد پهن
-    current = len(text)
-    padding = max(5, (min_width - current) // 2)
-    side = _EM_SPACE * padding
-    # خط دوم با کاراکتر خالیِ قابل‌عرض برای افزایش ارتفاع دکمه
-    return f"{side}{text}{side}\n{_BLANK * 8}"
+    if not text:
+        return "​\n​"
+
+    # آیکن ابتدای عنوان را جدا می‌کنیم تا دکمه ظاهر کارت‌مانند بگیرد.
+    parts = text.split(maxsplit=1)
+    if len(parts) == 2 and any(ord(ch) > 0x1F000 for ch in parts[0]):
+        icon, label = parts
+        return f"{icon}\n{label}"
+
+    return f"🛍️\n{text}"
 
 
 def button_style(value: str | None, default: ButtonStyle) -> ButtonStyle:
