@@ -23,16 +23,23 @@ STYLE_MAP = {
 # خط اول = آیکن، خط دوم = عنوان.
 
 def _large_shop_button_text(text: str, min_width: int = 30) -> str:
-    """متن دکمه فروشگاه را بزرگ‌تر می‌کند بدون جدا کردن آیکن و عنوان.
+    """متن دکمه‌های فروشگاه با ظاهر دوخطی و ارتفاع بزرگ‌تر.
 
-    Telegram برای InlineKeyboardButton اندازه پیکسلی مستقیم ندارد. برای
-    حفظ ظاهر بزرگِ نسخه قبلی، یک خط نامرئیِ انتهایی اضافه می‌کنیم؛ اما
-    آیکن و عنوان روی همان خط می‌مانند تا از هم فاصله غیرطبیعی نگیرند.
+    Telegram برای InlineKeyboardButton گزینه width/height پیکسلی ندارد؛
+    بنابراین بزرگ‌کردن واقعیِ ظاهر با یک چیدمان دوخطی انجام می‌شود،
+    نه با تغییر یک عدد بی‌اثر.
     """
     text = str(text).strip()
     if not text:
-        return "⁣\n⁣"
-    return f"{text}\n\u2063"
+        return "​\n​"
+
+    # آیکن ابتدای عنوان را جدا می‌کنیم تا دکمه ظاهر کارت‌مانند بگیرد.
+    parts = text.split(maxsplit=1)
+    if len(parts) == 2 and any(ord(ch) > 0x1F000 for ch in parts[0]):
+        icon, label = parts
+        return f"{icon}\n{label}"
+
+    return f"🛍️\n{text}"
 
 
 def button_style(value: str | None, default: ButtonStyle) -> ButtonStyle:
@@ -104,35 +111,60 @@ def products_keyboard(
     columns: int = DEFAULT_COLUMNS,
     force_columns: bool = False,
 ) -> InlineKeyboardMarkup:
-    """فقط فهرست انتخاب محصولات را نمایش می‌دهد.
-
-    پرداخت در این مرحله عمداً نمایش داده نمی‌شود؛ کاربر ابتدا محصول را
-    انتخاب می‌کند و سپس در صفحه جزئیات محصول، گزینه‌های پرداخت ریالی/توکنی
-    نمایش داده می‌شوند.
     """
-    effective_columns = columns if columns in (1, 2) else DEFAULT_COLUMNS
+    فهرست فروشگاه را به‌صورت واقعیِ قابل خرید می‌سازد.
+
+    هر محصول یک ردیف نام/انتخاب دارد و در صورت فعال بودن قیمت‌ها،
+    دکمه‌های پرداخت ریالی و توکنی نیز همان‌جا نمایش داده می‌شوند.
+    برای محصول VARIABLE_QUANTITY ابتدا باید تعداد انتخاب شود.
+    """
     rows = []
-    pending = []
+    effective_columns = columns if columns in (1, 2) else DEFAULT_COLUMNS
+    # وقتی تنظیمات سراسری فروشگاه فعال است، چیدمان همه محصولات دقیقاً از همان مقدار پیروی می‌کند.
+    pending_product_buttons = []
 
     for product in products:
-        button = InlineKeyboardButton(
+        product_button = InlineKeyboardButton(
             text=_large_shop_button_text(f"🛍 {product.name}", min_width=32),
             callback_data=f"shop:product:{product.id}",
             style=button_style(getattr(product, "button_style", None), ButtonStyle.PRIMARY),
         )
-        if effective_columns == 1:
-            rows.append([button])
-        else:
-            pending.append(button)
-            if len(pending) == 2:
-                rows.append(pending)
-                pending = []
+        pending_product_buttons.append(product_button)
+        if effective_columns == 1 or len(pending_product_buttons) == 2:
+            rows.append(pending_product_buttons)
+            pending_product_buttons = []
 
-    if pending:
-        rows.append(pending)
+        if product.product_type == "FIXED":
+            payment_buttons = []
+            if product.fixed_price is not None:
+                payment_buttons.append(InlineKeyboardButton(
+                    text=f"💳 ریالی — {product.fixed_price:,} تومان",
+                    callback_data=f"shop:buy:{product.id}:1",
+                    style=ButtonStyle.SUCCESS,
+                ))
+            if product.token_price and product.token_price > 0:
+                payment_buttons.append(InlineKeyboardButton(
+                    text=f"🪙 توکنی — {product.token_price:,} Token",
+                    callback_data=f"shop:buy_token:{product.id}:1",
+                    style=ButtonStyle.PRIMARY,
+                ))
+            if payment_buttons:
+                if effective_columns == 2 and len(payment_buttons) == 2:
+                    rows.append(payment_buttons)
+                else:
+                    rows.extend([[button] for button in payment_buttons])
+        else:
+            rows.append([InlineKeyboardButton(
+                text="🔢 انتخاب تعداد و پرداخت",
+                callback_data=f"shop:enter_qty:{product.id}",
+                style=ButtonStyle.SUCCESS,
+            )])
+
+    if pending_product_buttons:
+        rows.append(pending_product_buttons)
 
     rows.append([InlineKeyboardButton(
-        text="🔙 بازگشت\n\u2063",
+        text="🔙 بازگشت",
         callback_data="menu:shop",
         style=ButtonStyle.DANGER,
     )])
