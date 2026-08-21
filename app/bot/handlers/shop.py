@@ -19,6 +19,7 @@ from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.services.wallet_service import InsufficientBalanceError
 from app.services.game_service import InsufficientTokenError
+from app.utils.keyboards import pad_message_width
 from app.utils.message_manager import MessageManager
 
 router = Router(name="shop")
@@ -78,7 +79,7 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     if extra_row:
         keyboard.inline_keyboard.insert(0, extra_row)
 
-    return header, keyboard
+    return pad_message_width(header), keyboard
 
 
 @router.callback_query(F.data == "menu:shop")
@@ -116,7 +117,7 @@ async def handle_category(callback: CallbackQuery) -> None:
         product_columns = 1
     product_columns = 1 if product_columns not in (1, 2) else product_columns
     await callback.message.edit_text(
-        f"📂 {title}:",
+        pad_message_width(f"📂 {title}:"),
         reply_markup=products_keyboard(products, category_id, product_columns, force_columns=True),
     )
     await callback.answer()
@@ -164,7 +165,7 @@ async def handle_product_detail(callback: CallbackQuery) -> None:
         )
         text += f"\n🪙 قیمت با Token: <b>{token_label}</b>"
 
-    await callback.message.edit_text(text, reply_markup=product_detail_keyboard(product))
+    await callback.message.edit_text(pad_message_width(text), reply_markup=product_detail_keyboard(product))
     await callback.answer()
 
 
@@ -243,7 +244,7 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
         style=ButtonStyle.DANGER,
     )])
     keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-    await manager.send(text, reply_markup=keyboard)
+    await manager.send(pad_message_width(text), reply_markup=keyboard)
     await state.clear()
 
 
