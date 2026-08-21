@@ -98,26 +98,16 @@ def products_keyboard(
     انتخاب می‌کند و سپس در صفحه جزئیات محصول، گزینه‌های پرداخت ریالی/توکنی
     نمایش داده می‌شوند.
     """
-    effective_columns = columns if columns in (1, 2) else DEFAULT_COLUMNS
-    rows = []
-    pending = []
-
-    for product in products:
-        button = InlineKeyboardButton(
+    rows = _mixed_columns_buttons(
+        products,
+        lambda product: InlineKeyboardButton(
             text=_large_shop_button_text(f"🛍 {product.name}", min_width=32),
             callback_data=f"shop:product:{product.id}",
             style=button_style(getattr(product, "button_style", None), ButtonStyle.PRIMARY),
-        )
-        if effective_columns == 1:
-            rows.append([button])
-        else:
-            pending.append(button)
-            if len(pending) == 2:
-                rows.append(pending)
-                pending = []
-
-    if pending:
-        rows.append(pending)
+        ),
+        columns,
+        force_columns=force_columns,
+    )
 
     rows.append([InlineKeyboardButton(
         text="🔙 بازگشت",

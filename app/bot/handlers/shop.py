@@ -75,7 +75,7 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     except (TypeError, ValueError):
         category_columns = 1
     category_columns = 1 if category_columns not in (1, 2) else category_columns
-    keyboard = categories_keyboard(categories, category_columns, force_columns=True)
+    keyboard = categories_keyboard(categories, category_columns)
     if extra_row:
         keyboard.inline_keyboard.insert(0, extra_row)
 
@@ -118,7 +118,7 @@ async def handle_category(callback: CallbackQuery) -> None:
     product_columns = 1 if product_columns not in (1, 2) else product_columns
     await callback.message.edit_text(
         pad_message_width(f"📂 {title}:"),
-        reply_markup=products_keyboard(products, category_id, product_columns, force_columns=True),
+        reply_markup=products_keyboard(products, category_id, product_columns),
     )
     await callback.answer()
 
