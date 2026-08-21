@@ -35,7 +35,7 @@ def chunk_buttons(buttons: list[InlineKeyboardButton], columns: int = DEFAULT_CO
 _WIDTH_PAD_CHAR = "\u2800"
 
 
-def pad_message_width(text: str, min_chars: int = 38) -> str:
+def pad_message_width(text: str, min_chars: int = 60) -> str:
     """
     عرض حبابِ پیام (و در نتیجه عرض دکمه‌های شیشه‌ای چسبیده به آن) در
     تلگرام بر اساس عرضِ متنِ پیام تعیین می‌شود، نه عرض صفحه گوشی. برای
