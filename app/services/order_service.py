@@ -77,7 +77,7 @@ class OrderService:
         # کیف‌پول معرف واریز می‌شود. چون هر فراخوانی create_and_pay یک
         # سفارش کاملاً جدید (order.id تازه) می‌سازد، reference_id ذاتاً
         # یکتاست و امکان واریز تکراری برای یک خرید وجود ندارد.
-        if user.referred_by:
+        if user.referred_by and await SettingsService(self.session).is_referral_cashback_enabled():
             cashback_percent_raw = await SettingsService(self.session).get("referral_cashback_percent", "0")
             try:
                 cashback_percent = int(cashback_percent_raw)

@@ -41,9 +41,10 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
     if payload and payload.startswith("ref_"):
         referral_code = payload[len("ref_") :]
 
+    bonus_result: dict | None = None
     async with get_session() as session:
         user_service = UserService(session)
-        await user_service.get_or_create(
+        user = await user_service.get_or_create(
             telegram_id=message.from_user.id,
             username=message.from_user.username,
             first_name=message.from_user.first_name,
@@ -60,6 +61,11 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
                 message.bot, message.from_user.id
             )
 
+        # پاداش عضویت/دعوت فقط وقتی پرداخت می‌شود که عضویت کاربر در همه‌ی
+        # کانال‌های اجباری (اگر کانالی تعریف شده باشد) قطعاً تأیید شده باشد.
+        if is_member:
+            bonus_result = await user_service.award_start_bonuses(user)
+
     welcome_text = welcome_text.replace("{shop_name}", "").strip()
     text = welcome_text or "خوش آمدید."
 
@@ -70,4 +76,19 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
         )
         return
 
+    if bonus_result and bonus_result.get("join_bonus"):
+        text += f"\n\n🎁 <b>{bonus_result['join_bonus']:,} Token</b> پاداش عضویت به شما تعلق گرفت!"
+
     await message.answer(text, reply_markup=main_reply_keyboard())
+
+    if bonus_result and bonus_result.get("referral_bonus") and bonus_result.get("referrer_telegram_id"):
+        try:
+            await message.bot.send_message(
+                chat_id=bonus_result["referrer_telegram_id"],
+                text=(
+                    f"🤝 یکی از دوستانتان با لینک دعوت شما به ربات پیوست و عضو شد!\n"
+                    f"🎁 <b>{bonus_result['referral_bonus']:,} Token</b> به موجودی شما اضافه شد."
+                ),
+            )
+        except Exception:
+            pass

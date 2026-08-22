@@ -11,6 +11,8 @@ EDITABLE_SETTINGS = {
     "token_purchase_price": "🪙 قیمت خرید هر Token (تومان)",
     "shop_category_button_columns": "📂 چیدمان دکمه دسته‌بندی (۱/۲)",
     "shop_product_button_columns": "🛍 چیدمان دکمه محصول (۱/۲)",
+    "join_bonus_amount": "🎁 مقدار پاداش عضویت (Token)",
+    "referral_invite_bonus_amount": "🤝 مقدار پاداش دعوت دوست (Token)",
 }
 
 
@@ -215,7 +217,12 @@ def admin_discount_duration_keyboard(product_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_settings_keyboard(report_enabled: bool = True) -> InlineKeyboardMarkup:
+def admin_settings_keyboard(
+    report_enabled: bool = True,
+    join_bonus_enabled: bool = False,
+    referral_cashback_enabled: bool = True,
+    referral_invite_bonus_enabled: bool = False,
+) -> InlineKeyboardMarkup:
     buttons = [
         InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}")
         for key, label in EDITABLE_SETTINGS.items()
@@ -229,6 +236,26 @@ def admin_settings_keyboard(report_enabled: bool = True) -> InlineKeyboardMarkup
     )
 
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+
+    # کلیدهای فعال/غیرفعال‌سازی پاداش عضویت و رفرال؛ هرکدام مستقل از بقیه
+    # با یک لمس روشن/خاموش می‌شوند و مقدار (Token/درصد) از دکمه‌های بالا
+    # ویرایش می‌شود.
+    join_mark = "🟢" if join_bonus_enabled else "🔴"
+    cashback_mark = "🟢" if referral_cashback_enabled else "🔴"
+    invite_mark = "🟢" if referral_invite_bonus_enabled else "🔴"
+    rows.append([InlineKeyboardButton(
+        text=f"🎁 پاداش عضویت {join_mark}",
+        callback_data="admin:setting:toggle_join_bonus",
+    )])
+    rows.append([InlineKeyboardButton(
+        text=f"👥 کش‌بک رفرال {cashback_mark}",
+        callback_data="admin:setting:toggle_referral_cashback",
+    )])
+    rows.append([InlineKeyboardButton(
+        text=f"🤝 پاداش دعوت دوست {invite_mark}",
+        callback_data="admin:setting:toggle_referral_invite_bonus",
+    )])
+
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

@@ -943,24 +943,58 @@ async def handle_admin_channel_toggle(callback: CallbackQuery) -> None:
 # ---------- تنظیمات ----------
 
 
+async def _settings_keyboard_state(session) -> InlineKeyboardMarkup:
+    settings_service = SettingsService(session)
+    return admin_settings_keyboard(
+        report_enabled=await settings_service.is_order_report_enabled(),
+        join_bonus_enabled=await settings_service.is_join_bonus_enabled(),
+        referral_cashback_enabled=await settings_service.is_referral_cashback_enabled(),
+        referral_invite_bonus_enabled=await settings_service.is_referral_invite_bonus_enabled(),
+    )
+
+
 @router.callback_query(F.data == "admin:settings")
 async def handle_admin_settings(callback: CallbackQuery) -> None:
     async with get_session() as session:
-        report_enabled = await SettingsService(session).is_order_report_enabled()
-    await callback.message.edit_text(
-        "⚙️ <b>تنظیمات</b>", reply_markup=admin_settings_keyboard(report_enabled)
-    )
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
     await callback.answer()
 
 
 @router.callback_query(F.data == "admin:setting:toggle_report")
 async def handle_admin_toggle_report(callback: CallbackQuery) -> None:
     async with get_session() as session:
-        new_value = await SettingsService(session).toggle_order_report()
-    await callback.message.edit_text(
-        "⚙️ <b>تنظیمات</b>", reply_markup=admin_settings_keyboard(new_value)
-    )
+        await SettingsService(session).toggle_order_report()
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
     await callback.answer("✅ ذخیره شد")
+
+
+@router.callback_query(F.data == "admin:setting:toggle_join_bonus")
+async def handle_admin_toggle_join_bonus(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        new_value = await SettingsService(session).toggle_join_bonus()
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
+    await callback.answer("🎁 پاداش عضویت فعال شد" if new_value else "🎁 پاداش عضویت غیرفعال شد")
+
+
+@router.callback_query(F.data == "admin:setting:toggle_referral_cashback")
+async def handle_admin_toggle_referral_cashback(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        new_value = await SettingsService(session).toggle_referral_cashback()
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
+    await callback.answer("👥 کش‌بک رفرال فعال شد" if new_value else "👥 کش‌بک رفرال غیرفعال شد")
+
+
+@router.callback_query(F.data == "admin:setting:toggle_referral_invite_bonus")
+async def handle_admin_toggle_referral_invite_bonus(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        new_value = await SettingsService(session).toggle_referral_invite_bonus()
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
+    await callback.answer("🤝 پاداش دعوت دوست فعال شد" if new_value else "🤝 پاداش دعوت دوست غیرفعال شد")
 
 
 @router.callback_query(F.data.startswith("admin:setting:edit:"))
@@ -1021,6 +1055,11 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
     if key in {"shop_category_button_columns", "shop_product_button_columns"}:
         if value not in {"1", "2"}:
             await message.answer("❗️ فقط ۱ یا ۲ وارد کنید.\n۱ = یک دکمه در هر ردیف\n۲ = دو دکمه در هر ردیف")
+            return
+
+    if key in {"join_bonus_amount", "referral_invite_bonus_amount"}:
+        if not value.isdigit() or int(value) <= 0:
+            await message.answer("❗️ مقدار پاداش باید یک عدد صحیح و مثبت باشد.")
             return
 
     async with get_session() as session:

@@ -25,6 +25,18 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "shop_product_button_columns": "1",
     # قیمت هر Token هنگام خرید Token
     "token_purchase_price": "40",
+
+    # پاداش عضویت: وقتی فعال باشد، هر کاربری که /start بزند و در همه‌ی
+    # کانال‌های اجباری عضو شود، یک‌بار مقدار زیر را به‌صورت Token هدیه می‌گیرد.
+    "join_bonus_enabled": "false",
+    "join_bonus_amount": "50",
+
+    # پاداش رفرال - بخش کش‌بک: درصدی از هر خرید دوستِ دعوت‌شده به معرف برمی‌گردد.
+    "referral_cashback_enabled": "true",
+    # پاداش رفرال - بخش دعوت: مبلغ ثابت Token که یک‌بار، به‌ازای هر دوستی که
+    # با لینک دعوت وارد و در کانال‌ها عضو شود، به معرف تعلق می‌گیرد.
+    "referral_invite_bonus_enabled": "false",
+    "referral_invite_bonus_amount": "50",
 }
 
 
@@ -64,3 +76,33 @@ class SettingsService:
         new_value = "false" if current else "true"
         await self.set("order_report_enabled", new_value)
         return new_value == "true"
+
+    # ---------- پاداش عضویت و رفرال ----------
+
+    async def _is_flag_enabled(self, key: str, default: str = "false") -> bool:
+        value = await self.get(key, default)
+        return (value or "").strip().lower() == "true"
+
+    async def _toggle_flag(self, key: str, default: str = "false") -> bool:
+        current = await self._is_flag_enabled(key, default)
+        new_value = "false" if current else "true"
+        await self.set(key, new_value)
+        return new_value == "true"
+
+    async def is_join_bonus_enabled(self) -> bool:
+        return await self._is_flag_enabled("join_bonus_enabled", "false")
+
+    async def toggle_join_bonus(self) -> bool:
+        return await self._toggle_flag("join_bonus_enabled", "false")
+
+    async def is_referral_cashback_enabled(self) -> bool:
+        return await self._is_flag_enabled("referral_cashback_enabled", "true")
+
+    async def toggle_referral_cashback(self) -> bool:
+        return await self._toggle_flag("referral_cashback_enabled", "true")
+
+    async def is_referral_invite_bonus_enabled(self) -> bool:
+        return await self._is_flag_enabled("referral_invite_bonus_enabled", "false")
+
+    async def toggle_referral_invite_bonus(self) -> bool:
+        return await self._toggle_flag("referral_invite_bonus_enabled", "false")

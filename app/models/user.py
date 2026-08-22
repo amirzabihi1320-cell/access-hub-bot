@@ -36,6 +36,13 @@ class User(Base):
 
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # پاداش عضویت (join bonus) و پاداش دعوت دوست (referral invite bonus)
+    # هرکدام فقط یک‌بار برای هر کاربر پرداخت می‌شوند؛ این دو پرچم از
+    # پرداخت تکراری (مثلاً با /start زدن چندباره یا کلیک مکرر روی
+    # «بررسی عضویت») جلوگیری می‌کنند.
+    join_bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    referral_bonus_paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
