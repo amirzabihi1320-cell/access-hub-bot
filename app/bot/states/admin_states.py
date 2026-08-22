@@ -22,3 +22,5 @@ class AdminStates(StatesGroup):
     WAITING_CHANNEL_INVITE_LINK = State()
 
     WAITING_PRODUCT_DISCOUNT_PERCENT = State()
+
+    WAITING_USER_SEARCH = State()

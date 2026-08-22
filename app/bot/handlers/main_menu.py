@@ -9,6 +9,7 @@ from app.bot.handlers.wallet import build_wallet_view
 from app.bot.keyboards.reply_menu import (
     ACCOUNT,
     CHANNEL,
+    CHECKIN,
     DISCOUNTS,
     HOME,
     ORDERS,
@@ -21,6 +22,7 @@ from app.bot.keyboards.reply_menu import (
 from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.settings_service import SettingsService
+from app.services.user_service import UserService
 from app.utils.message_manager import MessageManager
 
 router = Router(name="main_menu")
@@ -104,6 +106,42 @@ async def handle_discounts_entry(message: Message, state: FSMContext) -> None:
     await _switch_to_home_keyboard(message)
     manager = MessageManager(message.bot, message.chat.id, state)
     await manager.send("🎁 تخفیف‌ها در فاز بعدی فعال می‌شود.")
+
+
+@router.message(F.text == CHECKIN)
+async def handle_checkin_entry(message: Message, state: FSMContext) -> None:
+    await _switch_to_home_keyboard(message)
+    manager = MessageManager(message.bot, message.chat.id, state)
+
+    async with get_session() as session:
+        user_service = UserService(session)
+        user = await user_service.get_or_create(
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name,
+        )
+        try:
+            result = await user_service.claim_daily_checkin(user)
+        except UserService.CheckinDisabledError:
+            await manager.send("🎁 چک-این روزانه در حال حاضر غیرفعال است.")
+            return
+        except UserService.AlreadyCheckedInError:
+            await manager.send(
+                f"✅ شما امروز قبلاً چک-این کرده‌اید.\n🔥 رکورد پیاپی: {user.checkin_streak} روز\n\nفردا دوباره سر بزنید!"
+            )
+            return
+
+    if result["amount"] > 0:
+        await manager.send(
+            f"🎁 چک-این امروز ثبت شد!\n"
+            f"🪙 <b>{result['amount']:,} Token</b> به موجودی شما اضافه شد.\n"
+            f"🔥 رکورد پیاپی: <b>{result['streak']}</b> روز"
+        )
+    else:
+        await manager.send(
+            f"✅ چک-این امروز ثبت شد.\n🔥 رکورد پیاپی: <b>{result['streak']}</b> روز"
+        )
 
 
 @router.message(F.text == SUPPORT)

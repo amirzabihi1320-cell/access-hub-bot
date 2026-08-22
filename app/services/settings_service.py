@@ -37,6 +37,20 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # با لینک دعوت وارد و در کانال‌ها عضو شود، به معرف تعلق می‌گیرد.
     "referral_invite_bonus_enabled": "false",
     "referral_invite_bonus_amount": "50",
+
+    # چک-این روزانه: هر کاربر یک‌بار در روز با زدن دکمه‌ی مربوطه Token می‌گیرد.
+    "daily_checkin_enabled": "false",
+    "daily_checkin_amount": "10",
+
+    # پاداش هفتگی لیدربرد بازی (Reaction Battle): هر هفته به‌صورت خودکار به
+    # سه نفر برتر جدول امتیازات هفتگی (بر اساس تعداد برد) Token پرداخت می‌شود.
+    "weekly_leaderboard_reward_enabled": "false",
+    "weekly_leaderboard_reward_top1": "100",
+    "weekly_leaderboard_reward_top2": "60",
+    "weekly_leaderboard_reward_top3": "30",
+    # آخرین هفته‌ای (مثلاً 2026-W34) که پاداش لیدربرد پرداخت شده؛ داخلی است
+    # و در پنل تنظیمات برای ویرایش دستی نمایش داده نمی‌شود.
+    "weekly_leaderboard_last_payout": "",
 }
 
 
@@ -106,3 +120,19 @@ class SettingsService:
 
     async def toggle_referral_invite_bonus(self) -> bool:
         return await self._toggle_flag("referral_invite_bonus_enabled", "false")
+
+    # ---------- چک-این روزانه ----------
+
+    async def is_daily_checkin_enabled(self) -> bool:
+        return await self._is_flag_enabled("daily_checkin_enabled", "false")
+
+    async def toggle_daily_checkin(self) -> bool:
+        return await self._toggle_flag("daily_checkin_enabled", "false")
+
+    # ---------- پاداش هفتگی لیدربرد ----------
+
+    async def is_weekly_leaderboard_reward_enabled(self) -> bool:
+        return await self._is_flag_enabled("weekly_leaderboard_reward_enabled", "false")
+
+    async def toggle_weekly_leaderboard_reward(self) -> bool:
+        return await self._toggle_flag("weekly_leaderboard_reward_enabled", "false")

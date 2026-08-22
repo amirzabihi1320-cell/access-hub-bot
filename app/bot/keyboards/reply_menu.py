@@ -9,6 +9,7 @@ ACCOUNT = "👤 حساب کاربری"
 SUPPORT = "🎧 پشتیبانی"
 CHANNEL = "📢 کانال ما"
 HOME = "🏠 منوی اصلی"
+CHECKIN = "🎁 چک-این روزانه"
 
 
 def main_reply_keyboard() -> ReplyKeyboardMarkup:
@@ -17,7 +18,8 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=SHOP), KeyboardButton(text=WALLET)],
             [KeyboardButton(text=ORDERS), KeyboardButton(text=DISCOUNTS)],
             [KeyboardButton(text=TOURNAMENTS), KeyboardButton(text=ACCOUNT)],
-            [KeyboardButton(text=SUPPORT), KeyboardButton(text=CHANNEL)],
+            [KeyboardButton(text=CHECKIN), KeyboardButton(text=SUPPORT)],
+            [KeyboardButton(text=CHANNEL)],
         ],
         resize_keyboard=True,
     )

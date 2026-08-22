@@ -9,6 +9,7 @@ from app.database.base import get_session
 from app.config.settings import get_settings
 from app.models.game import Game, GameEvent, GameReaction, PlatformTokenTransaction, TokenTransaction
 from app.models.user import User
+from app.services.settings_service import SettingsService
 
 settings = get_settings()
 logger = logging.getLogger("access_hub.games")
@@ -150,6 +151,20 @@ class TokenService:
                               description=f"Admin adjustment by {admin_id}")
         self.session.add(tx)
         return user
+
+    BONUS_TYPES = (
+        "join_bonus", "referral_invite_bonus", "daily_checkin", "weekly_leaderboard_reward",
+    )
+
+    async def sum_bonus_tokens_since(self, since: datetime) -> int:
+        """مجموع Token توزیع‌شده از طریق پاداش‌های خودکار (عضویت/رفرال/چک-این/لیدربرد) از یک تاریخ به بعد."""
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(TokenTransaction.amount), 0)).where(
+                TokenTransaction.type.in_(self.BONUS_TYPES),
+                TokenTransaction.created_at >= since,
+            )
+        )
+        return int(result.scalar_one())
 
 class GameService:
     def __init__(self, session: AsyncSession):
@@ -358,6 +373,70 @@ class GameService:
         stmt = stmt.group_by(User.id, User.username).order_by(func.count(Game.id).desc()).limit(10)
         return (await self.session.execute(stmt)).all()
 
+async def maybe_pay_weekly_leaderboard_rewards(bot):
+    """
+    یک‌بار در هفته (وقتی شماره هفته‌ی ISO عوض شود) به ۳ نفر برتر جدول
+    امتیازات هفتگی Reaction Battle، Token جایزه می‌دهد. با نگه‌داشتن
+    شماره‌ی آخرین هفته‌ی پرداخت‌شده در تنظیمات، از پرداخت تکراری در طول
+    همان هفته جلوگیری می‌شود؛ اگر پاداش غیرفعال باشد، مارکر آپدیت نمی‌شود
+    تا وقتی بعداً فعال شود، همان هفته پرداخت انجام شود.
+    """
+    year, week, _ = utcnow().isocalendar()
+    current_week_str = f"{year}-W{week:02d}"
+
+    async with get_session() as session:
+        settings_service = SettingsService(session)
+        if not await settings_service.is_weekly_leaderboard_reward_enabled():
+            return
+        last_payout = await settings_service.get("weekly_leaderboard_last_payout", "")
+        if last_payout == current_week_str:
+            return
+
+        rows = await GameService(session).leaderboard("weekly")
+        amount_keys = [
+            "weekly_leaderboard_reward_top1",
+            "weekly_leaderboard_reward_top2",
+            "weekly_leaderboard_reward_top3",
+        ]
+        medals = ["🥇", "🥈", "🥉"]
+        token_service = TokenService(session)
+        winners: list[tuple[int, str, int]] = []
+
+        for idx, row in enumerate(rows[:3]):
+            if not row.wins:
+                continue
+            try:
+                amount = int(await settings_service.get(amount_keys[idx], "0"))
+            except (TypeError, ValueError):
+                amount = 0
+            if amount <= 0:
+                continue
+            user = await session.get(User, row.id)
+            if not user:
+                continue
+            await token_service.credit(
+                user.id, amount, "weekly_leaderboard_reward",
+                reference_id=f"weekly-leaderboard:{current_week_str}:{user.id}",
+                description=f"پاداش هفتگی لیدربرد ({medals[idx]}, {row.wins} برد)",
+            )
+            winners.append((user.telegram_id, medals[idx], amount))
+
+        await settings_service.set("weekly_leaderboard_last_payout", current_week_str)
+        await session.commit()
+
+    for telegram_id, medal, amount in winners:
+        try:
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=(
+                    f"{medal} تبریک! شما یکی از نفرات برتر لیدربرد هفتگی Reaction Battle بودید.\n"
+                    f"🎁 <b>{amount:,} Token</b> به موجودی شما اضافه شد."
+                ),
+            )
+        except Exception:
+            pass
+
+
 async def scheduler_loop(bot):
     while True:
         try:
@@ -388,6 +467,10 @@ async def scheduler_loop(bot):
                     await refresh_game_message(bot, game.game_id)
                 except Exception:
                     pass
+            try:
+                await maybe_pay_weekly_leaderboard_rewards(bot)
+            except Exception:
+                logger.exception("Weekly leaderboard reward payout failed")
         except Exception:
             logger.exception("Game scheduler iteration failed")
         await asyncio.sleep(settings.game_scheduler_interval)

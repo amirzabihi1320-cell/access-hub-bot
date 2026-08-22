@@ -17,8 +17,10 @@ from app.bot.handlers import start as start_handler
 from app.bot.handlers import tournament as tournament_handler
 from app.bot.handlers import wallet as wallet_handler
 from app.bot.handlers import games as games_handler
+from app.bot.middlewares.blocked import BlockedUserMiddleware
 from app.bot.middlewares.maintenance import MaintenanceMiddleware
 from app.bot.middlewares.membership import MembershipMiddleware
+from app.bot.middlewares.throttling import ThrottlingMiddleware
 from app.config.settings import get_settings
 from app.database.seed import seed_initial_data
 from app.services.game_service import scheduler_loop
@@ -35,6 +37,11 @@ logger = logging.getLogger("access_hub")
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
 
+    # ترتیب اهمیت دارد: ابتدا ضدفلاد (سبک‌ترین/زودترین رد کردن اسپم)، بعد
+    # مسدودی کاربر، بعد Maintenance، در آخر عضویت اجباری (سنگین‌ترین چون
+    # با API تلگرام تماس می‌گیرد).
+    dp.update.middleware(ThrottlingMiddleware())
+    dp.update.middleware(BlockedUserMiddleware())
     dp.update.middleware(MaintenanceMiddleware())
     dp.update.middleware(MembershipMiddleware())
 

@@ -1,6 +1,6 @@
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,3 +143,89 @@ class UserService:
     async def count_all(self) -> int:
         result = await self.session.execute(select(func.count()).select_from(User))
         return result.scalar_one()
+
+    # ---------- چک-این روزانه ----------
+
+    class AlreadyCheckedInError(Exception):
+        """امروز قبلاً چک-این انجام شده است."""
+
+    class CheckinDisabledError(Exception):
+        """چک-این روزانه توسط ادمین غیرفعال است."""
+
+    async def claim_daily_checkin(self, user: User) -> dict:
+        """
+        پاداش چک-این روزانه را (اگر فعال باشد و امروز هنوز گرفته نشده) پرداخت
+        می‌کند و رشته‌ی حضور پشت‌سرهم (streak) را به‌روزرسانی می‌کند. اگر یک
+        روز کامل جا بیفتد، streak از نو از ۱ شروع می‌شود.
+        """
+        settings_service = SettingsService(self.session)
+        if not await settings_service.is_daily_checkin_enabled():
+            raise self.CheckinDisabledError("چک-این روزانه در حال حاضر غیرفعال است.")
+
+        today = date.today()
+        if user.last_checkin_date == today:
+            raise self.AlreadyCheckedInError("شما امروز قبلاً چک-این کرده‌اید.")
+
+        try:
+            amount = int(await settings_service.get("daily_checkin_amount", "10"))
+        except (TypeError, ValueError):
+            amount = 0
+
+        if user.last_checkin_date == today - timedelta(days=1):
+            user.checkin_streak += 1
+        else:
+            user.checkin_streak = 1
+        user.last_checkin_date = today
+
+        if amount > 0:
+            await TokenService(self.session).credit(
+                user.id, amount, "daily_checkin",
+                reference_id=f"daily-checkin:user:{user.id}:{today.isoformat()}",
+                description=f"پاداش چک-این روزانه (روز {user.checkin_streak} پیاپی)",
+            )
+
+        await self.session.commit()
+        return {"amount": amount, "streak": user.checkin_streak}
+
+    # ---------- مدیریت کاربران (ادمین) ----------
+
+    async def find_by_identifier(self, identifier: str) -> User | None:
+        """جست‌وجوی کاربر با آیدی عددی تلگرام یا یوزرنیم (با یا بدون @)."""
+        identifier = identifier.strip().lstrip("@")
+        if not identifier:
+            return None
+        if identifier.isdigit():
+            result = await self.session.execute(select(User).where(User.telegram_id == int(identifier)))
+        else:
+            result = await self.session.execute(select(User).where(User.username == identifier))
+        return result.scalar_one_or_none()
+
+    async def toggle_block(self, user_id: int) -> User:
+        user = await self.session.get(User, user_id)
+        if not user:
+            raise ValueError("کاربر پیدا نشد.")
+        user.is_blocked = not user.is_blocked
+        await self.session.commit()
+        return user
+
+    # ---------- آمار رشد (ادمین) ----------
+
+    async def count_new_since(self, since: datetime) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(User).where(User.created_at >= since)
+        )
+        return result.scalar_one()
+
+    async def referral_conversion_stats(self) -> tuple[int, int]:
+        """(تعداد کل کاربرانی که با رفرال آمده‌اند, تعداد آن‌ها که حداقل یک خرید موفق داشته‌اند)."""
+        total_result = await self.session.execute(
+            select(func.count()).select_from(User).where(User.referred_by.is_not(None))
+        )
+        total = total_result.scalar_one()
+        converted_result = await self.session.execute(
+            select(func.count()).select_from(User).where(
+                User.referred_by.is_not(None), User.total_purchases > 0
+            )
+        )
+        converted = converted_result.scalar_one()
+        return total, converted

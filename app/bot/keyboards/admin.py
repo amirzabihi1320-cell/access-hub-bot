@@ -13,6 +13,10 @@ EDITABLE_SETTINGS = {
     "shop_product_button_columns": "🛍 چیدمان دکمه محصول (۱/۲)",
     "join_bonus_amount": "🎁 مقدار پاداش عضویت (Token)",
     "referral_invite_bonus_amount": "🤝 مقدار پاداش دعوت دوست (Token)",
+    "daily_checkin_amount": "📅 مقدار پاداش چک-این روزانه (Token)",
+    "weekly_leaderboard_reward_top1": "🥇 جایزه نفر اول لیدربرد هفتگی",
+    "weekly_leaderboard_reward_top2": "🥈 جایزه نفر دوم لیدربرد هفتگی",
+    "weekly_leaderboard_reward_top3": "🥉 جایزه نفر سوم لیدربرد هفتگی",
 }
 
 
@@ -31,6 +35,7 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
         ("💳 درخواست‌های شارژ", "admin:deposits"),
         ("📦 سفارش‌های در انتظار", "admin:orders"),
         ("📢 عضویت اجباری", "admin:channels"),
+        ("👤 مدیریت کاربران", "admin:users"),
         ("⚙️ تنظیمات", "admin:settings"),
         ("🏆 تورنومنت‌ها", "admin:tournaments"),
         ("📊 آمار فروش", "admin:stats"),
@@ -222,6 +227,8 @@ def admin_settings_keyboard(
     join_bonus_enabled: bool = False,
     referral_cashback_enabled: bool = True,
     referral_invite_bonus_enabled: bool = False,
+    daily_checkin_enabled: bool = False,
+    weekly_leaderboard_reward_enabled: bool = False,
 ) -> InlineKeyboardMarkup:
     buttons = [
         InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}")
@@ -243,6 +250,8 @@ def admin_settings_keyboard(
     join_mark = "🟢" if join_bonus_enabled else "🔴"
     cashback_mark = "🟢" if referral_cashback_enabled else "🔴"
     invite_mark = "🟢" if referral_invite_bonus_enabled else "🔴"
+    checkin_mark = "🟢" if daily_checkin_enabled else "🔴"
+    leaderboard_mark = "🟢" if weekly_leaderboard_reward_enabled else "🔴"
     rows.append([InlineKeyboardButton(
         text=f"🎁 پاداش عضویت {join_mark}",
         callback_data="admin:setting:toggle_join_bonus",
@@ -254,6 +263,14 @@ def admin_settings_keyboard(
     rows.append([InlineKeyboardButton(
         text=f"🤝 پاداش دعوت دوست {invite_mark}",
         callback_data="admin:setting:toggle_referral_invite_bonus",
+    )])
+    rows.append([InlineKeyboardButton(
+        text=f"📅 چک-این روزانه {checkin_mark}",
+        callback_data="admin:setting:toggle_daily_checkin",
+    )])
+    rows.append([InlineKeyboardButton(
+        text=f"🏆 پاداش هفتگی لیدربرد {leaderboard_mark}",
+        callback_data="admin:setting:toggle_weekly_leaderboard",
     )])
 
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -42,6 +42,11 @@ class User(Base):
     # «بررسی عضویت») جلوگیری می‌کنند.
     join_bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     referral_bonus_paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # چک-این روزانه (بخش نگه‌داشت کاربر): آخرین تاریخی که پاداش روزانه
+    # گرفته و چند روز پشت‌سرهم بدون وقفه چک-این کرده (streak).
+    last_checkin_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    checkin_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -44,6 +44,7 @@ from app.models.required_channel import RequiredChannel
 from app.models.user import User
 from app.services.category_service import CategoryService
 from app.services.deposit_service import DepositService
+from app.services.game_service import TokenService
 from app.services.membership_service import MembershipService
 from app.services.order_service import OrderService
 from app.services.pricing_service import apply_discount, is_discount_active
@@ -124,6 +125,18 @@ async def handle_admin_stats(callback: CallbackQuery) -> None:
             name = product.name if product else f"محصول #{product_id}"
             lines_top.append(f"• {name} — {count} فروش ({total:,} تومان)")
 
+        # آمار رشد: کاربران جدید، نرخ تبدیل رفرال، Token توزیع‌شده از پاداش‌ها
+        user_service = UserService(session)
+        new_today = await user_service.count_new_since(today_start)
+        new_week = await user_service.count_new_since(week_start)
+        new_month = await user_service.count_new_since(month_start)
+        referred_total, referred_converted = await user_service.referral_conversion_stats()
+        conversion_rate = (referred_converted / referred_total * 100) if referred_total else 0
+
+        token_service = TokenService(session)
+        bonus_today = await token_service.sum_bonus_tokens_since(today_start)
+        bonus_week = await token_service.sum_bonus_tokens_since(week_start)
+
     text = (
         "📊 <b>آمار فروش</b>\n\n"
         f"📅 امروز: {today_count} سفارش — {today_sum:,} تومان\n"
@@ -131,6 +144,13 @@ async def handle_admin_stats(callback: CallbackQuery) -> None:
         f"📅 ۳۰ روز اخیر: {month_count} سفارش — {month_sum:,} تومان\n\n"
         "🏆 <b>پرفروش‌ترین محصولات</b>\n"
         + ("\n".join(lines_top) if lines_top else "هنوز فروشی ثبت نشده.")
+        + "\n\n📈 <b>آمار رشد</b>\n"
+        f"👤 کاربر جدید امروز: {new_today}\n"
+        f"👤 کاربر جدید ۷ روز اخیر: {new_week}\n"
+        f"👤 کاربر جدید ۳۰ روز اخیر: {new_month}\n"
+        f"🤝 نرخ تبدیل رفرال: {referred_converted}/{referred_total} ({conversion_rate:.1f}٪ حداقل یک خرید)\n"
+        f"🎁 Token پاداش توزیع‌شده امروز: {bonus_today:,}\n"
+        f"🎁 Token پاداش توزیع‌شده ۷ روز اخیر: {bonus_week:,}"
     )
 
     await callback.message.edit_text(text, reply_markup=admin_back_keyboard())
@@ -950,6 +970,8 @@ async def _settings_keyboard_state(session) -> InlineKeyboardMarkup:
         join_bonus_enabled=await settings_service.is_join_bonus_enabled(),
         referral_cashback_enabled=await settings_service.is_referral_cashback_enabled(),
         referral_invite_bonus_enabled=await settings_service.is_referral_invite_bonus_enabled(),
+        daily_checkin_enabled=await settings_service.is_daily_checkin_enabled(),
+        weekly_leaderboard_reward_enabled=await settings_service.is_weekly_leaderboard_reward_enabled(),
     )
 
 
@@ -995,6 +1017,24 @@ async def handle_admin_toggle_referral_invite_bonus(callback: CallbackQuery) -> 
         keyboard = await _settings_keyboard_state(session)
     await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
     await callback.answer("🤝 پاداش دعوت دوست فعال شد" if new_value else "🤝 پاداش دعوت دوست غیرفعال شد")
+
+
+@router.callback_query(F.data == "admin:setting:toggle_daily_checkin")
+async def handle_admin_toggle_daily_checkin(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        new_value = await SettingsService(session).toggle_daily_checkin()
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
+    await callback.answer("📅 چک-این روزانه فعال شد" if new_value else "📅 چک-این روزانه غیرفعال شد")
+
+
+@router.callback_query(F.data == "admin:setting:toggle_weekly_leaderboard")
+async def handle_admin_toggle_weekly_leaderboard(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        new_value = await SettingsService(session).toggle_weekly_leaderboard_reward()
+        keyboard = await _settings_keyboard_state(session)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
+    await callback.answer("🏆 پاداش هفتگی لیدربرد فعال شد" if new_value else "🏆 پاداش هفتگی لیدربرد غیرفعال شد")
 
 
 @router.callback_query(F.data.startswith("admin:setting:edit:"))
@@ -1062,11 +1102,102 @@ async def handle_admin_setting_value(message: Message, state: FSMContext) -> Non
             await message.answer("❗️ مقدار پاداش باید یک عدد صحیح و مثبت باشد.")
             return
 
+    if key in {
+        "daily_checkin_amount",
+        "weekly_leaderboard_reward_top1",
+        "weekly_leaderboard_reward_top2",
+        "weekly_leaderboard_reward_top3",
+    }:
+        if not value.isdigit() or int(value) <= 0:
+            await message.answer("❗️ مقدار پاداش باید یک عدد صحیح و مثبت باشد.")
+            return
+
     async with get_session() as session:
         await SettingsService(session).set(key, value)
     await state.clear()
     label = EDITABLE_SETTINGS.get(key, key)
     await message.answer(f"✅ «{label}» به‌روزرسانی شد.")
+
+
+# ---------- مدیریت کاربران ----------
+
+
+def _user_profile_text(user: User, referrals: int) -> str:
+    status = "🚫 مسدود" if user.is_blocked else "✅ فعال"
+    username = f"@{user.username}" if user.username else "—"
+    name = " ".join(filter(None, [user.first_name, user.last_name])) or "—"
+    return (
+        f"👤 <b>پروفایل کاربر</b>\n\n"
+        f"شناسه تلگرام: <code>{user.telegram_id}</code>\n"
+        f"یوزرنیم: {username}\n"
+        f"نام: {name}\n"
+        f"وضعیت: {status}\n\n"
+        f"🪙 موجودی Token: <b>{user.token_balance:,}</b>\n"
+        f"🛍 تعداد خرید: <b>{user.total_purchases}</b>\n"
+        f"💰 مجموع خرید: <b>{user.total_spent:,}</b> تومان\n"
+        f"🤝 تعداد دعوت‌شده‌ها: <b>{referrals}</b>\n"
+        f"📅 عضویت از: {user.created_at.strftime('%Y-%m-%d')}"
+    )
+
+
+def _user_profile_keyboard(user: User) -> InlineKeyboardMarkup:
+    block_text = "✅ رفع مسدودی" if user.is_blocked else "🚫 مسدودسازی"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=block_text, callback_data=f"admin:user:toggle_block:{user.id}")],
+        [InlineKeyboardButton(text="🔍 جست‌وجوی کاربر دیگر", callback_data="admin:users")],
+        [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")],
+    ])
+
+
+@router.callback_query(F.data == "admin:users")
+async def handle_admin_users(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    await state.set_state(AdminStates.WAITING_USER_SEARCH)
+    await callback.message.edit_text(
+        "👤 <b>مدیریت کاربران</b>\n\n"
+        "آیدی عددی تلگرام یا یوزرنیم (با یا بدون @) کاربر مورد نظر را بفرستید:",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_USER_SEARCH, F.text)
+async def handle_admin_user_search(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    async with get_session() as session:
+        user_service = UserService(session)
+        user = await user_service.find_by_identifier(message.text)
+        if not user:
+            await message.answer("❗️ کاربری با این مشخصات پیدا نشد. دوباره تلاش کنید یا بازگردید.")
+            return
+        referrals = await user_service.count_referrals(user.id)
+        text = _user_profile_text(user, referrals)
+        keyboard = _user_profile_keyboard(user)
+    await state.clear()
+    await message.answer(text, reply_markup=keyboard)
+
+
+@router.callback_query(F.data.startswith("admin:user:toggle_block:"))
+async def handle_admin_toggle_block(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    user_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        user_service = UserService(session)
+        try:
+            user = await user_service.toggle_block(user_id)
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+        referrals = await user_service.count_referrals(user.id)
+        text = _user_profile_text(user, referrals)
+        keyboard = _user_profile_keyboard(user)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer("🚫 کاربر مسدود شد" if user.is_blocked else "✅ کاربر رفع مسدودی شد")
 
 
 # ---------- شارژهای در انتظار ----------
