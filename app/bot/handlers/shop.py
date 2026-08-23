@@ -45,6 +45,16 @@ def _token_total(product, quantity: int = 1) -> int | None:
     return int(product.token_price) * quantity
 
 
+async def _send_purchase_sticker(bot, chat_id: int) -> None:
+    try:
+        async with get_session() as session:
+            sticker_id = await SettingsService(session).get("sticker_purchase_success") or ""
+        if sticker_id:
+            await bot.send_sticker(chat_id, sticker_id)
+    except Exception:
+        pass
+
+
 # قفل درون‌حافظه‌ای برای جلوگیری از دوبار کلیک روی پرداخت قبل از تمام‌شدن
 # پردازش قبلی (بخش ۱۷: جلوگیری از Duplicate Order). چون سرویس روی Render
 # تک‌پردازه اجرا می‌شود، این سطح از محافظت برای این فاز کافی است.
@@ -420,6 +430,7 @@ async def handle_buy_with_coupon(callback: CallbackQuery, state: FSMContext) -> 
             "سفارش شما برای آماده‌سازی ارسال شد.",
         )
         await callback.answer()
+        await _send_purchase_sticker(callback.bot, callback.message.chat.id)
         await state.update_data(temp_message_ids=[])
 
         username = f"@{callback.from_user.username}" if callback.from_user.username else "—"
@@ -503,6 +514,7 @@ async def handle_buy_token(callback: CallbackQuery, state: FSMContext) -> None:
             "سفارش شما برای آماده‌سازی ارسال شد.",
         )
         await callback.answer()
+        await _send_purchase_sticker(callback.bot, callback.message.chat.id)
 
         username = f"@{callback.from_user.username}" if callback.from_user.username else "—"
         admin_text = (
@@ -576,6 +588,7 @@ async def handle_buy(callback: CallbackQuery, state: FSMContext) -> None:
             "سفارش شما برای آماده‌سازی ارسال شد.",
         )
         await callback.answer()
+        await _send_purchase_sticker(callback.bot, callback.message.chat.id)
         # این پیام حالا حاوی «رسید تأیید سفارش» است (دسته PAYMENT/ORDER در بخش ۴
         # سند) و نباید هرگز خودکار پاک شود؛ پس آن را از ردیابی پیام‌های موقت
         # خارج می‌کنیم تا با پاکسازی مرحله‌ی بعد از بین نرود.

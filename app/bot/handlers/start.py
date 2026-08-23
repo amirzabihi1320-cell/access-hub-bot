@@ -54,6 +54,7 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
 
         settings_service = SettingsService(session)
         welcome_text = await settings_service.get("welcome_text") or ""
+        sticker_welcome = await settings_service.get("sticker_welcome") or ""
         required_channels = await MembershipService(session).get_active_channels()
         is_member = True
         if required_channels:
@@ -78,6 +79,12 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
 
     if bonus_result and bonus_result.get("join_bonus"):
         text += f"\n\n🎁 <b>{bonus_result['join_bonus']:,} Token</b> پاداش عضویت به شما تعلق گرفت!"
+
+    if sticker_welcome:
+        try:
+            await message.answer_sticker(sticker_welcome)
+        except Exception:
+            pass
 
     await message.answer(text, reply_markup=main_reply_keyboard())
 

@@ -131,6 +131,13 @@ async def handle_checkin_entry(message: Message, state: FSMContext) -> None:
                 f"✅ شما امروز قبلاً چک-این کرده‌اید.\n🔥 رکورد پیاپی: {user.checkin_streak} روز\n\nفردا دوباره سر بزنید!"
             )
             return
+        sticker_checkin = await SettingsService(session).get("sticker_checkin") or ""
+
+    if sticker_checkin:
+        try:
+            await message.bot.send_sticker(message.chat.id, sticker_checkin)
+        except Exception:
+            pass
 
     if result["amount"] > 0:
         await manager.send(

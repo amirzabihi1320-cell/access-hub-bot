@@ -7,7 +7,7 @@
 بدون تغییر کد قابل ویرایش‌اند.
 """
 from aiogram import F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.exceptions import TelegramBadRequest
@@ -72,12 +72,13 @@ async def _dashboard_text(session) -> str:
     pending_deposits = await DepositService(session).count_pending()
 
     return (
-        "📊 <b>داشبورد</b>\n\n"
-        f"👥 کاربران: {users_count}\n"
-        f"📦 کل سفارش‌ها: {orders_count}\n"
-        f"🔄 سفارش‌های در انتظار تحویل: {pending_orders}\n"
-        f"💰 درآمد کل: {revenue:,} تومان\n"
-        f"💳 شارژهای در انتظار تأیید: {pending_deposits}"
+        "🛠 <b>پنل مدیریت Access Hub</b>\n"
+        "━━━━━━━━━━━━━━━\n"
+        f"👥 کاربران: <b>{users_count:,}</b>\n"
+        f"📦 کل سفارش‌ها: <b>{orders_count:,}</b>\n"
+        f"🔄 در انتظار تحویل: <b>{pending_orders:,}</b>\n"
+        f"💰 درآمد کل: <b>{revenue:,}</b> تومان\n"
+        f"💳 شارژ در انتظار تأیید: <b>{pending_deposits:,}</b>"
     )
 
 
@@ -1357,6 +1358,24 @@ async def handle_admin_broadcast_confirm(callback: CallbackQuery, state: FSMCont
     await callback.message.answer(
         f"✅ ارسال پیام همگانی تمام شد.\n\n📤 موفق: {sent:,}\n❌ ناموفق (مسدود/حذف‌شده و ...): {failed:,}",
         reply_markup=admin_back_keyboard(),
+    )
+
+
+@router.message(F.sticker, StateFilter(None))
+async def handle_admin_sticker_grab(message: Message) -> None:
+    """
+    ابزار کمکی: هر استیکری که ادمین برای ربات بفرستد (خارج از یک فرآیند
+    دیگر مثل پیام همگانی)، فایل‌آیدی‌اش برگردانده می‌شود تا در تنظیمات
+    (مثلاً «استیکر خوش‌آمدگویی») استفاده شود. StateFilter(None) عمداً
+    گذاشته شده تا وقتی ادمین در حال ارسال پیام همگانی (که ممکن است خودش
+    یک استیکر باشد) است، این ابزار جلوی آن را نگیرد.
+    """
+    if not _is_admin(message.from_user.id):
+        return
+    await message.answer(
+        "🎯 فایل‌آیدی این استیکر:\n\n"
+        f"<code>{message.sticker.file_id}</code>\n\n"
+        "این متن رو کپی کن و توی تنظیمات مربوطه (مثلاً «🎉 استیکر خوش‌آمدگویی») پیست کن.",
     )
 
 
