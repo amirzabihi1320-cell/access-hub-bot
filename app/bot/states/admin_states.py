@@ -24,3 +24,7 @@ class AdminStates(StatesGroup):
     WAITING_PRODUCT_DISCOUNT_PERCENT = State()
 
     WAITING_USER_SEARCH = State()
+
+    WAITING_COUPON_PERCENT = State()
+
+    WAITING_BROADCAST_MESSAGE = State()

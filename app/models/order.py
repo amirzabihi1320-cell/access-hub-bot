@@ -29,6 +29,9 @@ class Order(Base):
     delivery_type: Mapped[str] = mapped_column(String(16), nullable=False, default="MANUAL")
     delivery_data: Mapped[str | None] = mapped_column(Text, nullable=True)  # کد تحویلی یا یادداشت ادمین
 
+    # کد تخفیفی که (اگر) روی این سفارش اعمال شده، فقط برای نمایش/سابقه.
+    coupon_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

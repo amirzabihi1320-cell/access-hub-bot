@@ -21,6 +21,19 @@ class ProductService:
         result = await self.session.execute(select(Product).where(Product.id == product_id))
         return result.scalar_one_or_none()
 
+    async def search(self, query: str, limit: int = 15) -> list[Product]:
+        """جست‌وجوی محصولات فعال بر اساس بخشی از نام (بدون توجه به بزرگی/کوچکی حروف)."""
+        query = (query or "").strip()
+        if not query:
+            return []
+        result = await self.session.execute(
+            select(Product)
+            .where(Product.status.is_(True), Product.name.ilike(f"%{query}%"))
+            .order_by(Product.name)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     # ---------- ادمین (بخش ۲۹: مدیریت محصولات) ----------
 
     async def list_all(self) -> list[Product]:

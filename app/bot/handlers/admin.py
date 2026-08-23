@@ -11,6 +11,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.exceptions import TelegramBadRequest
+import asyncio
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
@@ -43,6 +44,7 @@ from app.models.product import Product
 from app.models.required_channel import RequiredChannel
 from app.models.user import User
 from app.services.category_service import CategoryService
+from app.services.coupon_service import CouponError, CouponService
 from app.services.deposit_service import DepositService
 from app.services.game_service import TokenService
 from app.services.membership_service import MembershipService
@@ -1198,6 +1200,164 @@ async def handle_admin_toggle_block(callback: CallbackQuery) -> None:
         keyboard = _user_profile_keyboard(user)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer("🚫 کاربر مسدود شد" if user.is_blocked else "✅ کاربر رفع مسدودی شد")
+
+
+# ---------- کدهای تخفیف ----------
+
+
+def _coupons_list_text_and_keyboard(coupons: list) -> tuple[str, InlineKeyboardMarkup]:
+    if not coupons:
+        text = "🎟 <b>کدهای تخفیف فعال</b>\n\nهنوز کد فعالی وجود ندارد."
+    else:
+        lines = [f"• <code>{c.code}</code> — ٪{c.discount_percent} تخفیف" for c in coupons]
+        text = "🎟 <b>کدهای تخفیف فعال (استفاده‌نشده)</b>\n\n" + "\n".join(lines)
+
+    rows = [[InlineKeyboardButton(text="➕ ساخت کد جدید", callback_data="admin:coupon:new")]]
+    rows += [[InlineKeyboardButton(text=f"🗑 حذف {c.code}", callback_data=f"admin:coupon:delete:{c.id}")] for c in coupons]
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "admin:coupons")
+async def handle_admin_coupons(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    async with get_session() as session:
+        coupons = await CouponService(session).list_active()
+    text, keyboard = _coupons_list_text_and_keyboard(coupons)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:coupon:new")
+async def handle_admin_coupon_new(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    await state.set_state(AdminStates.WAITING_COUPON_PERCENT)
+    await callback.message.edit_text(
+        "🎟 درصد تخفیف کد جدید را وارد کنید (بین ۱ تا ۹۰):",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_COUPON_PERCENT, F.text)
+async def handle_admin_coupon_percent(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    if not message.text.strip().isdigit():
+        await message.answer("❗️ فقط یک عدد بین ۱ تا ۹۰ بفرستید.")
+        return
+    percent = int(message.text.strip())
+
+    async with get_session() as session:
+        try:
+            coupon = await CouponService(session).create(percent, message.from_user.id)
+        except CouponError as e:
+            await message.answer(f"❗️ {e}")
+            return
+
+    await state.clear()
+    await message.answer(
+        f"✅ کد تخفیف ساخته شد:\n\n"
+        f"کد: <code>{coupon.code}</code>\n"
+        f"تخفیف: ٪{coupon.discount_percent}\n\n"
+        "این کد فقط یک‌بار قابل استفاده است و بعد از اولین خرید موفق با آن، خودکار غیرفعال می‌شود.",
+    )
+
+
+@router.callback_query(F.data.startswith("admin:coupon:delete:"))
+async def handle_admin_coupon_delete(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    coupon_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        try:
+            await CouponService(session).delete(coupon_id)
+        except CouponError as e:
+            await callback.answer(f"❗️ {e}", show_alert=True)
+            return
+        coupons = await CouponService(session).list_active()
+    text, keyboard = _coupons_list_text_and_keyboard(coupons)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer("🗑 حذف شد")
+
+
+# ---------- پیام همگانی (Broadcast) ----------
+
+_BROADCAST_DELAY_SECONDS = 0.05  # برای رعایت محدودیت نرخ ارسال تلگرام
+
+
+@router.callback_query(F.data == "admin:broadcast")
+async def handle_admin_broadcast_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    await state.set_state(AdminStates.WAITING_BROADCAST_MESSAGE)
+    await callback.message.edit_text(
+        "📢 پیامی که می‌خواهید برای همه‌ی کاربران ارسال شود را بفرستید\n"
+        "(متن، عکس، ویدیو یا هر نوع پیام دیگر).",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_BROADCAST_MESSAGE)
+async def handle_admin_broadcast_preview(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    async with get_session() as session:
+        total_users = await UserService(session).count_all()
+
+    await state.update_data(broadcast_message_id=message.message_id, broadcast_chat_id=message.chat.id)
+    await state.set_state(None)
+
+    await message.answer(
+        f"👆 این پیام برای <b>{total_users:,}</b> کاربر ارسال خواهد شد.\n"
+        "مطمئنید؟",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ بله، ارسال کن", callback_data="admin:broadcast:confirm")],
+            [InlineKeyboardButton(text="❌ انصراف", callback_data="admin:menu")],
+        ]),
+    )
+
+
+@router.callback_query(F.data == "admin:broadcast:confirm")
+async def handle_admin_broadcast_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    data = await state.get_data()
+    message_id = data.get("broadcast_message_id")
+    chat_id = data.get("broadcast_chat_id")
+    if not message_id or not chat_id:
+        await callback.answer("❗️ پیامی برای ارسال پیدا نشد. دوباره تلاش کنید.", show_alert=True)
+        return
+
+    await state.clear()
+    await callback.message.edit_text("📢 در حال ارسال... این ممکن است چند دقیقه طول بکشد.")
+    await callback.answer()
+
+    async with get_session() as session:
+        result = await session.execute(select(User.telegram_id))
+        telegram_ids = [row[0] for row in result.all()]
+
+    sent, failed = 0, 0
+    for telegram_id in telegram_ids:
+        try:
+            await callback.bot.copy_message(chat_id=telegram_id, from_chat_id=chat_id, message_id=message_id)
+            sent += 1
+        except Exception:
+            failed += 1
+        await asyncio.sleep(_BROADCAST_DELAY_SECONDS)
+
+    await callback.message.answer(
+        f"✅ ارسال پیام همگانی تمام شد.\n\n📤 موفق: {sent:,}\n❌ ناموفق (مسدود/حذف‌شده و ...): {failed:,}",
+        reply_markup=admin_back_keyboard(),
+    )
 
 
 # ---------- شارژهای در انتظار ----------

@@ -36,6 +36,8 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
         ("📦 سفارش‌های در انتظار", "admin:orders"),
         ("📢 عضویت اجباری", "admin:channels"),
         ("👤 مدیریت کاربران", "admin:users"),
+        ("🎟 کدهای تخفیف", "admin:coupons"),
+        ("📢 پیام همگانی", "admin:broadcast"),
         ("⚙️ تنظیمات", "admin:settings"),
         ("🏆 تورنومنت‌ها", "admin:tournaments"),
         ("📊 آمار فروش", "admin:stats"),

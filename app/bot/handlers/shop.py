@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.keyboards.orders import admin_order_deliver_keyboard
 from app.bot.keyboards.shop import _large_shop_button_text, categories_keyboard, product_detail_keyboard, products_keyboard
-from app.bot.states.shop_states import ProductQuantityStates
+from app.bot.states.shop_states import CouponStates, ProductQuantityStates, ShopSearchStates
 from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.category_service import CategoryService
+from app.services.coupon_service import CouponError, CouponService
 from app.services.order_service import OrderService, ProductUnavailableError, build_order_report_text
 from app.services.pricing_service import InvalidQuantityError, apply_discount, calculate_price, is_discount_active
 from app.services.product_service import ProductService
@@ -78,6 +79,7 @@ async def build_categories_view(session: AsyncSession) -> tuple[str, InlineKeybo
     keyboard = categories_keyboard(categories, category_columns)
     if extra_row:
         keyboard.inline_keyboard.insert(0, extra_row)
+    keyboard.inline_keyboard.insert(0, [InlineKeyboardButton(text="🔍 جستجوی محصول", callback_data="shop:search")])
 
     return pad_message_width(header), keyboard
 
@@ -94,6 +96,53 @@ async def handle_shop_back(callback: CallbackQuery) -> None:
     text, keyboard = view
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
+
+
+@router.callback_query(F.data == "shop:search")
+async def handle_shop_search_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(search_prompt_message_id=callback.message.message_id)
+    await state.set_state(ShopSearchStates.WAITING_QUERY)
+    await callback.message.edit_text(
+        "🔍 بخشی از نام محصول مورد نظر را بفرستید:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 انصراف", callback_data="menu:shop")],
+        ]),
+    )
+    await callback.answer()
+
+
+@router.message(ShopSearchStates.WAITING_QUERY)
+async def handle_shop_search_query(message: Message, state: FSMContext) -> None:
+    manager = MessageManager(message.bot, message.chat.id, state)
+    data = await state.get_data()
+    prompt_id = data.get("search_prompt_message_id")
+
+    if not message.text or not message.text.strip():
+        await manager.delete_message_id(message.message_id)
+        return
+
+    async with get_session() as session:
+        results = await ProductService(session).search(message.text.strip())
+
+    await manager.delete_message_id(message.message_id)
+    if prompt_id:
+        await manager.delete_message_id(prompt_id)
+    await state.set_state(None)
+
+    if not results:
+        rows = [[InlineKeyboardButton(text="🔙 بازگشت به فروشگاه", callback_data="menu:shop")]]
+        await manager.send("😕 محصولی با این عنوان پیدا نشد.", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        return
+
+    rows = [[InlineKeyboardButton(
+        text=_large_shop_button_text(f"🛍 {p.name}", min_width=32),
+        callback_data=f"shop:product:{p.id}",
+    )] for p in results]
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت به فروشگاه", callback_data="menu:shop")])
+    await manager.send(
+        pad_message_width(f"🔍 نتایج جستجو برای «{message.text.strip()}»:"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
 
 
 @router.callback_query(F.data.startswith("shop:category:"))
@@ -169,6 +218,53 @@ async def handle_product_detail(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+def _build_order_confirmation(product, result, coupon=None) -> tuple[str, InlineKeyboardMarkup]:
+    """صفحه‌ی تأیید سفارش، هم برای حالت عادی و هم بعد از اعمال موفق کد تخفیف."""
+    if coupon:
+        discounted = result.total_price - (result.total_price * coupon.discount_percent // 100)
+        text = (
+            f"🧾 <b>سفارش شما</b>\n\n"
+            f"{product.name} — {result.quantity} عدد\n\n"
+            f"قیمت اولیه: <s>{result.total_price:,} تومان</s>\n"
+            f"🎟 کد {coupon.code} (٪{coupon.discount_percent} تخفیف)\n"
+            f"قیمت نهایی:\n<b>{discounted:,} تومان</b>"
+        )
+        rows = [[InlineKeyboardButton(
+            text=f"💳 پرداخت ریالی — {discounted:,} تومان",
+            callback_data=f"shop:buy_coupon:{product.id}:{result.quantity}:{coupon.id}",
+            style=ButtonStyle.SUCCESS,
+        )]]
+    else:
+        text = (
+            f"🧾 <b>سفارش شما</b>\n\n"
+            f"{product.name} — {result.quantity} عدد\n\n"
+            f"قیمت نهایی:\n<b>{result.total_price:,} تومان</b>"
+        )
+        rows = [[InlineKeyboardButton(
+            text=f"💳 پرداخت ریالی — {result.total_price:,} تومان",
+            callback_data=f"shop:buy:{product.id}:{result.quantity}",
+            style=ButtonStyle.SUCCESS,
+        )]]
+        token_total = _token_total(product, result.quantity)
+        if token_total:
+            rows.append([InlineKeyboardButton(
+                text=f"🪙 پرداخت توکنی — {token_total:,} Token",
+                callback_data=f"shop:buy_token:{product.id}:{result.quantity}",
+                style=ButtonStyle.PRIMARY,
+            )])
+        rows.append([InlineKeyboardButton(
+            text="🎟 اعمال کد تخفیف",
+            callback_data=f"shop:coupon:{product.id}:{result.quantity}",
+        )])
+
+    rows.append([InlineKeyboardButton(
+        text="🔙 بازگشت",
+        callback_data=f"shop:category:{product.category_id}",
+        style=ButtonStyle.DANGER,
+    )])
+    return pad_message_width(text), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 @router.callback_query(F.data.startswith("shop:enter_qty:"))
 async def handle_enter_quantity(callback: CallbackQuery, state: FSMContext) -> None:
     product_id = int(callback.data.split(":")[2])
@@ -221,30 +317,146 @@ async def handle_quantity_input(message: Message, state: FSMContext) -> None:
     await state.update_data(qty_prompt_message_id=None)
     await state.set_state(None)
 
-    text = (
-        f"🧾 <b>سفارش شما</b>\n\n"
-        f"{product.name} — {result.quantity} عدد\n\n"
-        f"قیمت نهایی:\n<b>{result.total_price:,} تومان</b>"
+    text, keyboard = _build_order_confirmation(product, result)
+    await manager.send(text, reply_markup=keyboard)
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("shop:coupon:"))
+async def handle_coupon_start(callback: CallbackQuery, state: FSMContext) -> None:
+    parts = callback.data.split(":")
+    product_id, quantity = int(parts[2]), int(parts[3])
+    await state.update_data(
+        coupon_product_id=product_id,
+        coupon_quantity=quantity,
+        coupon_prompt_message_id=callback.message.message_id,
     )
-    rows = [[InlineKeyboardButton(
-        text=f"💳 پرداخت ریالی — {result.total_price:,} تومان",
-        callback_data=f"shop:buy:{product.id}:{result.quantity}",
-        style=ButtonStyle.SUCCESS,
-    )]]
-    token_total = _token_total(product, result.quantity)
-    if token_total:
-        rows.append([InlineKeyboardButton(
-            text=f"🪙 پرداخت توکنی — {token_total:,} Token",
-            callback_data=f"shop:buy_token:{product.id}:{result.quantity}",
-            style=ButtonStyle.PRIMARY,
-        )])
-    rows.append([InlineKeyboardButton(
-        text="🔙 بازگشت",
-        callback_data=f"shop:category:{product.category_id}",
-        style=ButtonStyle.DANGER,
-    )])
-    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-    await manager.send(pad_message_width(text), reply_markup=keyboard)
+    await state.set_state(CouponStates.WAITING_CODE)
+    await callback.message.edit_text(
+        "🎟 کد تخفیف را وارد کنید:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🔙 انصراف", callback_data=f"shop:product:{product_id}"),
+        ]]),
+    )
+    await callback.answer()
+
+
+@router.message(CouponStates.WAITING_CODE)
+async def handle_coupon_code_input(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    product_id = data["coupon_product_id"]
+    quantity = data["coupon_quantity"]
+    manager = MessageManager(message.bot, message.chat.id, state)
+
+    if not message.text or not message.text.strip():
+        await manager.delete_message_id(message.message_id)
+        return
+
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+        if not product:
+            await manager.delete_message_id(message.message_id)
+            await state.clear()
+            await manager.send("❌ محصول پیدا نشد.")
+            return
+        try:
+            result = calculate_price(product, quantity)
+            coupon = await CouponService(session).validate(message.text.strip())
+        except InvalidQuantityError as e:
+            await manager.delete_message_id(message.message_id)
+            await manager.send(f"❌ {e}")
+            return
+        except CouponError as e:
+            await manager.delete_message_id(message.message_id)
+            await message.answer(f"❌ {e}\n\nدوباره تلاش کنید یا انصراف بدهید.")
+            return
+
+    prompt_id = data.get("coupon_prompt_message_id")
+    if prompt_id:
+        await manager.delete_message_id(prompt_id)
+    await manager.delete_message_id(message.message_id)
+    await state.set_state(None)
+
+    text, keyboard = _build_order_confirmation(product, result, coupon=coupon)
+    await manager.send(text, reply_markup=keyboard)
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("shop:buy_coupon:"))
+async def handle_buy_with_coupon(callback: CallbackQuery, state: FSMContext) -> None:
+    user_id = callback.from_user.id
+    if user_id in _processing_purchases:
+        await callback.answer("⏳ درخواست قبلی در حال پردازش است.", show_alert=True)
+        return
+
+    _processing_purchases.add(user_id)
+    try:
+        parts = callback.data.split(":")
+        product_id, quantity, coupon_id = int(parts[2]), int(parts[3]), int(parts[4])
+
+        async with get_session() as session:
+            user = await UserService(session).get_or_create(
+                user_id, callback.from_user.username, callback.from_user.first_name,
+                callback.from_user.last_name,
+            )
+            product = await ProductService(session).get(product_id)
+            order_service = OrderService(session)
+            try:
+                order = await order_service.create_and_pay_with_coupon(user.id, product_id, quantity, coupon_id)
+            except InsufficientBalanceError:
+                await callback.answer("❌ موجودی کیف پول کافی نیست.", show_alert=True)
+                return
+            except CouponError as e:
+                await callback.answer(f"❌ {e}", show_alert=True)
+                return
+            except (ProductUnavailableError, InvalidQuantityError, ValueError) as e:
+                await callback.answer(f"❌ {e}", show_alert=True)
+                return
+
+        await callback.message.edit_text(
+            f"✅ <b>پرداخت موفق</b>\n\n"
+            f"{product.name} — {order.final_price:,} تومان (با کد {order.coupon_code})\n"
+            f"شماره سفارش: #{order.order_number}\n\n"
+            "سفارش شما برای آماده‌سازی ارسال شد.",
+        )
+        await callback.answer()
+        await state.update_data(temp_message_ids=[])
+
+        username = f"@{callback.from_user.username}" if callback.from_user.username else "—"
+        admin_text = (
+            "🛍 <b>سفارش جدید</b>\n\n"
+            f"کاربر: {username}\n"
+            f"محصول: {product.name}\n"
+            f"تعداد: {order.quantity}\n"
+            f"پرداخت: {order.final_price:,} تومان (کد {order.coupon_code})\n"
+            f"سفارش: #{order.order_number}"
+        )
+        for admin_id in settings.admin_ids:
+            try:
+                await callback.bot.send_message(
+                    chat_id=admin_id,
+                    text=admin_text,
+                    reply_markup=admin_order_deliver_keyboard(order.id),
+                )
+            except Exception:
+                continue
+
+        try:
+            async with get_session() as session:
+                report_enabled = await SettingsService(session).is_order_report_enabled()
+        except Exception:
+            report_enabled = True
+
+        if report_enabled:
+            try:
+                await callback.bot.send_message(
+                    chat_id=settings.report_channel_id,
+                    text=build_order_report_text(order, product.name),
+                )
+            except Exception:
+                pass
+    finally:
+        _processing_purchases.discard(user_id)
     await state.clear()
 
 

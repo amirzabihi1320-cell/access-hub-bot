@@ -18,6 +18,7 @@ from app.core.enums import OrderStatus, WalletTransactionType
 from app.models.order import Order
 from app.models.product import Product
 from app.models.user import User
+from app.services.coupon_service import CouponError, CouponService
 from app.services.pricing_service import calculate_price
 from app.services.settings_service import SettingsService
 from app.services.wallet_service import WalletService
@@ -100,7 +101,77 @@ class OrderService:
         await self.session.refresh(order)
         return order
 
-    async def create_and_pay_token(self, user_id: int, product_id: int, quantity: int) -> Order:
+    async def create_and_pay_with_coupon(self, user_id: int, product_id: int, quantity: int, coupon_id: int) -> Order:
+        """
+        مشابه create_and_pay ولی پیش از کسر پول، کد تخفیف را (با قفل ردیف،
+        برای امنیت در برابر استفاده‌ی هم‌زمان) مصرف کرده و درصدش را روی
+        قیمت نهایی اعمال می‌کند. اگر کد بین لحظه‌ی نمایش پیش‌نمایش و همین
+        لحظه توسط کس دیگری استفاده شده باشد، CouponError بالا می‌رود و کل
+        سفارش (طبق rollback خودکار get_session) لغو می‌شود.
+        """
+        product = await self.session.get(Product, product_id)
+        if not product or not product.status:
+            raise ProductUnavailableError("این محصول در دسترس نیست.")
+
+        price = calculate_price(product, quantity)
+        coupon_service = CouponService(self.session)
+
+        order = Order(
+            user_id=user_id,
+            product_id=product_id,
+            quantity=price.quantity,
+            unit_price=price.unit_price,
+            final_price=price.total_price,
+            status=OrderStatus.PENDING.value,
+            delivery_type="MANUAL",
+        )
+        self.session.add(order)
+        await self.session.flush()
+        order.order_number = f"AH-{order.id:06d}"
+
+        # مصرف نهایی کد همین‌جا، داخل همین تراکنش انجام می‌شود (نه در لحظه‌ی
+        # پیش‌نمایش) تا race condition ممکن نباشد.
+        redeemed_coupon = await coupon_service.redeem_locked(coupon_id, user_id, order.id)
+        discounted_price = price.total_price - (price.total_price * redeemed_coupon.discount_percent // 100)
+        order.final_price = discounted_price
+        order.coupon_code = redeemed_coupon.code
+
+        await WalletService(self.session).debit(
+            user_id=user_id,
+            amount=discounted_price,
+            type_=WalletTransactionType.PURCHASE,
+            reference_id=f"order:{order.id}",
+            description=f"خرید {product.name} (کد تخفیف {redeemed_coupon.code})",
+        )
+
+        order.status = OrderStatus.WAITING_ADMIN.value
+
+        user = await self.session.get(User, user_id)
+        user.total_purchases += 1
+        user.total_spent += discounted_price
+
+        if user.referred_by and await SettingsService(self.session).is_referral_cashback_enabled():
+            cashback_percent_raw = await SettingsService(self.session).get("referral_cashback_percent", "0")
+            try:
+                cashback_percent = int(cashback_percent_raw)
+            except (TypeError, ValueError):
+                cashback_percent = 0
+            if cashback_percent > 0:
+                cashback_amount = discounted_price * cashback_percent // 100
+                if cashback_amount > 0:
+                    referrer = await self.session.get(User, user.referred_by)
+                    if referrer:
+                        await WalletService(self.session).credit(
+                            user_id=referrer.id,
+                            amount=cashback_amount,
+                            type_=WalletTransactionType.BONUS,
+                            reference_id=f"referral-cashback:order:{order.id}",
+                            description=f"پاداش رفرال از خرید {product.name}",
+                        )
+
+        await self.session.commit()
+        await self.session.refresh(order)
+        return order
         """ساخت سفارش و پرداخت کامل با Access Token."""
         product = await self.session.get(Product, product_id)
         if not product or not product.status:
