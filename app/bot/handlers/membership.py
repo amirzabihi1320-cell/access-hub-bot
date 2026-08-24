@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery
 from app.bot.keyboards.reply_menu import main_reply_keyboard
 from app.database.base import get_session
 from app.services.membership_service import MembershipService
+from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 
 router = Router(name="membership")
@@ -12,6 +13,7 @@ router = Router(name="membership")
 @router.callback_query(lambda c: c.data == "membership:check")
 async def handle_membership_check(callback: CallbackQuery) -> None:
     bonus_result: dict | None = None
+    menu_icons: dict = {}
     async with get_session() as session:
         membership_service = MembershipService(session)
         channels = await membership_service.get_active_channels()
@@ -26,13 +28,14 @@ async def handle_membership_check(callback: CallbackQuery) -> None:
                 last_name=callback.from_user.last_name,
             )
             bonus_result = await user_service.award_start_bonuses(user)
+            menu_icons = await SettingsService(session).get_menu_icons()
 
     if is_member or not channels:
         await callback.message.edit_text("✅ عضویت شما تأیید شد.")
         text = "🌐 <b>Access Hub</b>"
         if bonus_result and bonus_result.get("join_bonus"):
             text += f"\n\n🎁 <b>{bonus_result['join_bonus']:,} Token</b> پاداش عضویت به شما تعلق گرفت!"
-        await callback.message.answer(text, reply_markup=main_reply_keyboard())
+        await callback.message.answer(text, reply_markup=main_reply_keyboard(menu_icons))
 
         if bonus_result and bonus_result.get("referral_bonus") and bonus_result.get("referrer_telegram_id"):
             try:

@@ -46,6 +46,11 @@ async def _welcome_text() -> str:
     return welcome_text.replace("{shop_name}", "").strip() or "خوش آمدید."
 
 
+async def _menu_icons() -> dict:
+    async with get_session() as session:
+        return await SettingsService(session).get_menu_icons()
+
+
 @router.message(F.text == SHOP)
 async def handle_shop_entry(message: Message, state: FSMContext) -> None:
     await _switch_to_home_keyboard(message)
@@ -171,4 +176,4 @@ async def handle_home(message: Message, state: FSMContext) -> None:
     await manager.cleanup_temp()
 
     text = await _welcome_text()
-    await message.answer(text, reply_markup=main_reply_keyboard())
+    await message.answer(text, reply_markup=main_reply_keyboard(await _menu_icons()))

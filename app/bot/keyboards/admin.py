@@ -20,37 +20,40 @@ EDITABLE_SETTINGS = {
     "sticker_welcome": "🎉 استیکر خوش‌آمدگویی (/start)",
     "sticker_checkin": "📅 استیکر چک-این روزانه",
     "sticker_purchase_success": "✅ استیکر خرید موفق",
+    "icon_shop": "🛍 آیکون پریمیوم دکمه فروشگاه",
+    "icon_wallet": "💰 آیکون پریمیوم دکمه کیف پول",
+    "icon_checkin": "📅 آیکون پریمیوم دکمه چک-این",
+    "icon_discounts": "🎁 آیکون پریمیوم دکمه تخفیف‌ها",
 }
 
 
 
 def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
     """
-    پنل ادمین به‌صورت گروه‌بندی‌شده و دوستونه چیده شده تا هم مرتب‌تر باشد
-    هم با یک اسکرول کوتاه همه‌چیز دیده شود. فقط «آمار فروش» (پرکاربردترین
-    گزینه) تمام‌عرض است.
+    پنل ادمین گروه‌بندی‌شده، دوستونه، و با رنگ‌های واقعی تلگرام (Bot API 9.4):
+    قرمز = نیازمند رسیدگی فوری، سبز = مدیریت کاتالوگ، آبی = بقیه‌ی موارد.
     """
     rows = [
-        [InlineKeyboardButton(text="📊 آمار فروش", callback_data="admin:stats")],
+        [InlineKeyboardButton(text="📊 آمار فروش", callback_data="admin:stats", style=ButtonStyle.PRIMARY)],
         [
-            InlineKeyboardButton(text="🛍 محصولات", callback_data="admin:products"),
-            InlineKeyboardButton(text="📂 دسته‌بندی‌ها", callback_data="admin:categories"),
+            InlineKeyboardButton(text="🛍 محصولات", callback_data="admin:products", style=ButtonStyle.SUCCESS),
+            InlineKeyboardButton(text="📂 دسته‌بندی‌ها", callback_data="admin:categories", style=ButtonStyle.SUCCESS),
         ],
         [
-            InlineKeyboardButton(text="📦 سفارش‌های در انتظار", callback_data="admin:orders"),
-            InlineKeyboardButton(text="💳 درخواست‌های شارژ", callback_data="admin:deposits"),
+            InlineKeyboardButton(text="📦 سفارش‌های در انتظار", callback_data="admin:orders", style=ButtonStyle.DANGER),
+            InlineKeyboardButton(text="💳 درخواست‌های شارژ", callback_data="admin:deposits", style=ButtonStyle.DANGER),
         ],
         [
-            InlineKeyboardButton(text="🎟 کدهای تخفیف", callback_data="admin:coupons"),
-            InlineKeyboardButton(text="👤 مدیریت کاربران", callback_data="admin:users"),
+            InlineKeyboardButton(text="🎟 کدهای تخفیف", callback_data="admin:coupons", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="👤 مدیریت کاربران", callback_data="admin:users", style=ButtonStyle.PRIMARY),
         ],
         [
-            InlineKeyboardButton(text="📢 عضویت اجباری", callback_data="admin:channels"),
-            InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments"),
+            InlineKeyboardButton(text="📢 عضویت اجباری", callback_data="admin:channels", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments", style=ButtonStyle.PRIMARY),
         ],
         [
-            InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast"),
-            InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings"),
+            InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings", style=ButtonStyle.PRIMARY),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -238,15 +241,18 @@ def admin_settings_keyboard(
     daily_checkin_enabled: bool = False,
     weekly_leaderboard_reward_enabled: bool = False,
 ) -> InlineKeyboardMarkup:
-    # مقادیر قابل‌ویرایش (متن/عدد)، دوستونه
+    # مقادیر قابل‌ویرایش (متن/عدد)، دوستونه، آبی (چون همیشه یک اکشن خنثی هستند)
     buttons = [
-        InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}")
+        InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}", style=ButtonStyle.PRIMARY)
         for key, label in EDITABLE_SETTINGS.items()
     ]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
 
-    # کلیدهای فعال/غیرفعال‌سازی، دوستونه؛ هرکدام مستقل از بقیه با یک لمس
-    # روشن/خاموش می‌شوند و مقدار (Token/درصد) از دکمه‌های بالا ویرایش می‌شود.
+    # کلیدهای فعال/غیرفعال‌سازی، دوستونه؛ رنگ دکمه (سبز/قرمز) خودش نشانگر
+    # وضعیت روشن/خاموش است، ایموجی هم برای وضوح بیشتر نگه داشته شده.
+    def _toggle_style(enabled: bool) -> ButtonStyle:
+        return ButtonStyle.SUCCESS if enabled else ButtonStyle.DANGER
+
     report_mark = "🟢" if report_enabled else "🔴"
     join_mark = "🟢" if join_bonus_enabled else "🔴"
     cashback_mark = "🟢" if referral_cashback_enabled else "🔴"
@@ -255,16 +261,16 @@ def admin_settings_keyboard(
     leaderboard_mark = "🟢" if weekly_leaderboard_reward_enabled else "🔴"
 
     rows.append([
-        InlineKeyboardButton(text=f"📢 گزارش سفارش {report_mark}", callback_data="admin:setting:toggle_report"),
-        InlineKeyboardButton(text=f"🎁 پاداش عضویت {join_mark}", callback_data="admin:setting:toggle_join_bonus"),
+        InlineKeyboardButton(text=f"📢 گزارش سفارش {report_mark}", callback_data="admin:setting:toggle_report", style=_toggle_style(report_enabled)),
+        InlineKeyboardButton(text=f"🎁 پاداش عضویت {join_mark}", callback_data="admin:setting:toggle_join_bonus", style=_toggle_style(join_bonus_enabled)),
     ])
     rows.append([
-        InlineKeyboardButton(text=f"👥 کش‌بک رفرال {cashback_mark}", callback_data="admin:setting:toggle_referral_cashback"),
-        InlineKeyboardButton(text=f"🤝 پاداش دعوت {invite_mark}", callback_data="admin:setting:toggle_referral_invite_bonus"),
+        InlineKeyboardButton(text=f"👥 کش‌بک رفرال {cashback_mark}", callback_data="admin:setting:toggle_referral_cashback", style=_toggle_style(referral_cashback_enabled)),
+        InlineKeyboardButton(text=f"🤝 پاداش دعوت {invite_mark}", callback_data="admin:setting:toggle_referral_invite_bonus", style=_toggle_style(referral_invite_bonus_enabled)),
     ])
     rows.append([
-        InlineKeyboardButton(text=f"📅 چک-این روزانه {checkin_mark}", callback_data="admin:setting:toggle_daily_checkin"),
-        InlineKeyboardButton(text=f"🏆 لیدربرد هفتگی {leaderboard_mark}", callback_data="admin:setting:toggle_weekly_leaderboard"),
+        InlineKeyboardButton(text=f"📅 چک-این روزانه {checkin_mark}", callback_data="admin:setting:toggle_daily_checkin", style=_toggle_style(daily_checkin_enabled)),
+        InlineKeyboardButton(text=f"🏆 لیدربرد هفتگی {leaderboard_mark}", callback_data="admin:setting:toggle_weekly_leaderboard", style=_toggle_style(weekly_leaderboard_reward_enabled)),
     ])
 
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])

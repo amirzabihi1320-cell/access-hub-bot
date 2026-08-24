@@ -1379,6 +1379,37 @@ async def handle_admin_sticker_grab(message: Message) -> None:
     )
 
 
+@router.message(
+    F.entities.func(lambda entities: any(e.type == "custom_emoji" for e in entities)),
+    StateFilter(None),
+)
+async def handle_admin_custom_emoji_grab(message: Message) -> None:
+    """
+    ابزار کمکی مشابه بالا، ولی برای ایموجی پریمیوم: اگه پیامی حاوی
+    ایموجی کاستوم (پریمیوم) بفرستی، آیدی هرکدوم برگردونده می‌شه.
+    نکته‌ی مهم: فقط زمانی خودِ ربات می‌تونه از این آیدی‌ها روی دکمه استفاده
+    کنه که سازنده‌ی ربات (نه هر کاربری) اشتراک Telegram Premium فعال داشته
+    باشه؛ این محدودیت خودِ تلگرامه، نه چیزی که از این ربات قابل دورزدنه.
+    """
+    if not _is_admin(message.from_user.id):
+        return
+    custom_emojis = [e for e in (message.entities or []) if e.type == "custom_emoji"]
+    if not custom_emojis:
+        return
+
+    text = message.text or ""
+    lines = ["🎯 آیدی ایموجی‌های پریمیوم پیدا‌شده:\n"]
+    for entity in custom_emojis:
+        emoji_char = text[entity.offset: entity.offset + entity.length]
+        lines.append(f"{emoji_char} → <code>{entity.custom_emoji_id}</code>")
+    lines.append(
+        "\nهرکدوم رو کپی کن و توی تنظیمات مربوطه (مثلاً «🛍 آیکون پریمیوم دکمه فروشگاه») پیست کن.\n"
+        "⚠️ این آیکون‌ها فقط وقتی روی دکمه‌ها نمایش داده می‌شن که سازنده‌ی ربات "
+        "خودش اشتراک Telegram Premium فعال داشته باشه (محدودیت خودِ تلگرام)."
+    )
+    await message.answer("\n".join(lines))
+
+
 # ---------- شارژهای در انتظار ----------
 
 

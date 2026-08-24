@@ -55,6 +55,7 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
         settings_service = SettingsService(session)
         welcome_text = await settings_service.get("welcome_text") or ""
         sticker_welcome = await settings_service.get("sticker_welcome") or ""
+        menu_icons = await settings_service.get_menu_icons()
         required_channels = await MembershipService(session).get_active_channels()
         is_member = True
         if required_channels:
@@ -86,7 +87,7 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
         except Exception:
             pass
 
-    await message.answer(text, reply_markup=main_reply_keyboard())
+    await message.answer(text, reply_markup=main_reply_keyboard(menu_icons))
 
     if bonus_result and bonus_result.get("referral_bonus") and bonus_result.get("referrer_telegram_id"):
         try:

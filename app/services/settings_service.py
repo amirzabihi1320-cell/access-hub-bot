@@ -57,6 +57,14 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "sticker_welcome": "",
     "sticker_checkin": "",
     "sticker_purchase_success": "",
+
+    # آیدی ایموجی‌های پریمیوم (اختیاری) روی دکمه‌های اصلی منو؛ فقط وقتی
+    # واقعاً کار می‌کند که خودِ سازنده‌ی ربات (نه کاربر عادی) اشتراک
+    # Telegram Premium فعال داشته باشد. خالی = بدون آیکون.
+    "icon_shop": "",
+    "icon_wallet": "",
+    "icon_checkin": "",
+    "icon_discounts": "",
 }
 
 
@@ -142,3 +150,18 @@ class SettingsService:
 
     async def toggle_weekly_leaderboard_reward(self) -> bool:
         return await self._toggle_flag("weekly_leaderboard_reward_enabled", "false")
+
+    # ---------- آیکون‌های پریمیوم منوی اصلی ----------
+
+    async def get_menu_icons(self) -> dict[str, str]:
+        """
+        فقط کلیدهایی که واقعاً مقدار دارند برمی‌گرداند (خالی = بدون آیکون)
+        تا reply_menu.main_reply_keyboard مجبور نباشد رشته‌ی خالی را چک کند.
+        """
+        keys = ["icon_shop", "icon_wallet", "icon_checkin", "icon_discounts"]
+        result = {}
+        for key in keys:
+            value = await self.get(key, "")
+            if value:
+                result[key] = value
+        return result
