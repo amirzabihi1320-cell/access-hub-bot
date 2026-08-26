@@ -23,7 +23,8 @@ EDITABLE_SETTINGS = {
     "icon_shop": "🛍 آیکون پریمیوم دکمه فروشگاه",
     "icon_wallet": "💰 آیکون پریمیوم دکمه کیف پول",
     "icon_checkin": "📅 آیکون پریمیوم دکمه چک-این",
-    "icon_discounts": "🎁 آیکون پریمیوم دکمه تخفیف‌ها",
+    "icon_leaderboard": "🏆 آیکون پریمیوم دکمه لیدربرد",
+    "support_contact": "🎧 آیدی/لینک پشتیبانی",
 }
 
 

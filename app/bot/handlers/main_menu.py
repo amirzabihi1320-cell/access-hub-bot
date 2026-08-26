@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.bot.handlers.account import build_account_view
 from app.bot.handlers.orders import build_orders_view
@@ -10,8 +10,8 @@ from app.bot.keyboards.reply_menu import (
     ACCOUNT,
     CHANNEL,
     CHECKIN,
-    DISCOUNTS,
     HOME,
+    LEADERBOARD,
     ORDERS,
     SHOP,
     SUPPORT,
@@ -21,6 +21,7 @@ from app.bot.keyboards.reply_menu import (
 )
 from app.config.settings import get_settings
 from app.database.base import get_session
+from app.services.game_service import GameService
 from app.services.settings_service import SettingsService
 from app.services.user_service import UserService
 from app.utils.message_manager import MessageManager
@@ -106,11 +107,22 @@ async def handle_orders_entry(message: Message, state: FSMContext) -> None:
     await manager.send(text)
 
 
-@router.message(F.text == DISCOUNTS)
-async def handle_discounts_entry(message: Message, state: FSMContext) -> None:
+@router.message(F.text == LEADERBOARD)
+async def handle_leaderboard_entry(message: Message, state: FSMContext) -> None:
     await _switch_to_home_keyboard(message)
     manager = MessageManager(message.bot, message.chat.id, state)
-    await manager.send("🎁 تخفیف‌ها در فاز بعدی فعال می‌شود.")
+
+    async with get_session() as session:
+        rows = await GameService(session).leaderboard("all")
+
+    text = "🏆 <b>برترین بازیکنان (کل دوران)</b>\n\n"
+    medals = ["🥇", "🥈", "🥉"]
+    for i, row in enumerate(rows, 1):
+        username = f"@{row.username}" if row.username else f"کاربر {row.id}"
+        medal = medals[i - 1] if i <= 3 else f"{i}."
+        text += f"{medal} {username} — <b>{row.wins}</b> برد\n"
+
+    await manager.send(text if rows else text + "هنوز بازی‌ای ثبت نشده.")
 
 
 @router.message(F.text == CHECKIN)
@@ -160,7 +172,22 @@ async def handle_checkin_entry(message: Message, state: FSMContext) -> None:
 async def handle_support_entry(message: Message, state: FSMContext) -> None:
     await _switch_to_home_keyboard(message)
     manager = MessageManager(message.bot, message.chat.id, state)
-    await manager.send("🎧 پشتیبانی در فاز بعدی فعال می‌شود.")
+
+    async with get_session() as session:
+        contact = await SettingsService(session).get("support_contact") or ""
+
+    if not contact:
+        await manager.send("🎧 پشتیبانی هنوز توسط ادمین تنظیم نشده. بعداً دوباره سر بزنید.")
+        return
+
+    text = f"🎧 <b>پشتیبانی</b>\n\nبرای ارتباط با پشتیبانی:\n{contact}"
+    if contact.startswith("@"):
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="💬 چت با پشتیبانی", url=f"https://t.me/{contact.lstrip('@')}"),
+        ]])
+        await manager.send(text, reply_markup=keyboard)
+    else:
+        await manager.send(text)
 
 
 @router.message(F.text == CHANNEL)

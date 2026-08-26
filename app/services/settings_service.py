@@ -64,7 +64,12 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "icon_shop": "",
     "icon_wallet": "",
     "icon_checkin": "",
-    "icon_discounts": "",
+    "icon_leaderboard": "",
+
+    # اطلاعات تماس پشتیبانی (یوزرنیم یا لینک) که با زدن دکمه‌ی «🎧 پشتیبانی»
+    # به کاربر نشان داده می‌شود. اگر با @ شروع شود، یک دکمه‌ی «چت با
+    # پشتیبانی» هم اضافه می‌شود.
+    "support_contact": "",
 }
 
 
@@ -158,7 +163,7 @@ class SettingsService:
         فقط کلیدهایی که واقعاً مقدار دارند برمی‌گرداند (خالی = بدون آیکون)
         تا reply_menu.main_reply_keyboard مجبور نباشد رشته‌ی خالی را چک کند.
         """
-        keys = ["icon_shop", "icon_wallet", "icon_checkin", "icon_discounts"]
+        keys = ["icon_shop", "icon_wallet", "icon_checkin", "icon_leaderboard"]
         result = {}
         for key in keys:
             value = await self.get(key, "")

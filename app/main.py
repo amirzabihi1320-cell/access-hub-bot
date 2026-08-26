@@ -5,6 +5,7 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import BotCommand
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
@@ -58,6 +59,17 @@ def create_dispatcher() -> Dispatcher:
     return dp
 
 
+async def _set_bot_commands(bot: Bot) -> None:
+    """
+    این‌ها همون کامندهایی‌ان که با زدن دکمه‌ی سه‌خط (☰) کنار جعبه‌ی تایپ
+    همیشه در دسترس کاربر می‌مونن — /start همیشه اونجاست، صرف‌نظر از این‌که
+    کاربر کجای مکالمه باشه یا کیبورد Reply رو بسته باشه.
+    """
+    await bot.set_my_commands([
+        BotCommand(command="start", description="🏠 شروع / منوی اصلی"),
+    ])
+
+
 async def run_polling() -> None:
     bot = Bot(
         token=settings.bot_token,
@@ -67,6 +79,7 @@ async def run_polling() -> None:
 
     logger.info("Access Hub bot starting in POLLING mode...")
     await bot.delete_webhook(drop_pending_updates=True)
+    await _set_bot_commands(bot)
     scheduler_task = asyncio.create_task(scheduler_loop(bot))
     try:
         await dp.start_polling(bot)
@@ -103,6 +116,7 @@ async def run_webhook() -> None:
 
     logger.info(f"Access Hub bot starting in WEBHOOK mode -> {webhook_url}")
     await bot.set_webhook(webhook_url, drop_pending_updates=True)
+    await _set_bot_commands(bot)
 
     app = web.Application()
     app.router.add_get("/", health_check)
