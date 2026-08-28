@@ -121,6 +121,34 @@ class ProductService:
         await self.session.commit()
         return product
 
+    # ---------- VPN Auto-Delivery (بند ۷، ۲۰، ۵۷ سند) ----------
+
+    async def toggle_vpn_enabled(self, product_id: int) -> Product:
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+        product.is_vpn_product = not product.is_vpn_product
+        await self.session.commit()
+        return product
+
+    async def update_vpn_data_limit_gb(self, product_id: int, gb: int | None) -> Product:
+        """gb=None یعنی نامحدود."""
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+        product.vpn_data_limit_gb = gb
+        await self.session.commit()
+        return product
+
+    async def update_vpn_duration_days(self, product_id: int, days: int | None) -> Product:
+        """days=None یعنی بدون انقضا."""
+        product = await self.get(product_id)
+        if product is None:
+            raise ValueError("محصول پیدا نشد.")
+        product.vpn_duration_days = days
+        await self.session.commit()
+        return product
+
     async def _next_sort_order(self, category_id: int) -> int:
         result = await self.session.execute(
             select(func.coalesce(func.max(Product.sort_order), -1)).where(Product.category_id == category_id)

@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     )
     log_level: str = Field("INFO", alias="LOG_LEVEL")
 
+    # --- Provider Engine / VPN Engine ---
+    # کلید رمزنگاری Credential پنل‌های VPN (app/core/crypto.py). با
+    # ``python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"``
+    # بساز. در Production اجباری است؛ در development اگر خالی بماند یک
+    # کلید موقت تولید می‌شود (با هشدار در لاگ).
+    panel_encryption_key: str = Field("", alias="PANEL_ENCRYPTION_KEY")
+
     # --- Access Hub Game System ---
     game_chat_id: int | None = Field(None, alias="GAME_CHAT_ID")
     game_expiration_seconds: int = Field(900, alias="GAME_EXPIRATION_SECONDS")

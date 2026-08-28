@@ -85,3 +85,37 @@ class MembershipRequirement(str, enum.Enum):
     PURCHASE_ONLY = "PURCHASE_ONLY"
     BOT_USE_ONLY = "BOT_USE_ONLY"
     DISABLED = "DISABLED"
+
+
+# ---------- Provider Engine / VPN Engine (فاز Provider) ----------
+
+
+class VPNPanelType(str, enum.Enum):
+    """
+    نوع پنل VPN. هر مقدار باید در app/providers/registry.py به یک
+    کلاس Provider concrete نگاشت شده باشد. اضافه‌کردن پنل جدید یعنی:
+    ۱) یک مقدار اینجا اضافه کن، ۲) یک Provider در app/providers/vpn/
+    بنویس، ۳) در registry.py ثبتش کن. بدون تغییر بقیه‌ی سیستم.
+    """
+    MARZBAN = "MARZBAN"
+    SANAEI = "SANAEI"  # اسکلت آماده - پیاده‌سازی کامل در فاز بعد
+
+
+class VPNPanelStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"
+    ERROR = "ERROR"
+
+
+class HealthStatus(str, enum.Enum):
+    ONLINE = "ONLINE"
+    DEGRADED = "DEGRADED"
+    OFFLINE = "OFFLINE"
+    UNKNOWN = "UNKNOWN"
+
+
+class VPNServiceStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    DISABLED = "DISABLED"
+    ERROR = "ERROR"

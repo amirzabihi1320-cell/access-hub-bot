@@ -23,6 +23,43 @@
 ADMIN_IDS دسترسی کامل دارد)، کوپن/رفرال reward/VIP (فاز ۶)، تیکت/
 Broadcast/Audit Log (فاز ۷)، Telegram Stars (فاز ۸).
 
+### 🔌 Provider Engine / VPN Engine (شروع‌شده)
+
+- ✅ `app/providers/` — رابط انتزاعی مشترک Provider (`BaseProvider`) و VPN
+  (`BaseVPNProvider`) + `registry.py` برای افزودن پنل جدید بدون تغییر Core.
+- ✅ **Marzban Provider کامل** (`app/providers/vpn/marzban.py`): Auth،
+  Health Check، Create/Get/Modify/Delete/Revoke/Enable/Disable User، با
+  Refresh خودکار توکن و نگاشت خطاها به پیام کاربرپسند (Provider اصلی هرگز
+  مستقیم به کاربر نشان داده نمی‌شود).
+- ✅ مدل‌های `VPNPanel` (چند پنل هم‌زمان، اولویت، Health کش‌شده) و
+  `VPNService` (سرویس تحویل‌شده به کاربر) + Migration `0016_vpn_engine`.
+- ✅ `VPNProvisioningService` — Smart Panel Selection با Failover خودکار
+  بین پنل‌ها (بند ۱۵ سند).
+- ✅ مدیریت کامل پنل‌ها از پنل ادمین تلگرام (افزودن/تست اتصال/فعال-غیرفعال/حذف)
+  بدون نیاز به تغییر کد. Credential پنل‌ها با Fernet رمزنگاری می‌شود
+  (`PANEL_ENCRYPTION_KEY` در `.env` - جزئیات نهایی مدیریت کلید در فاز
+  مستقل Security مشخص می‌شود).
+- ✅ **اتصال کامل به Order Engine (بند ۵۷: Payment → VPN Automation):**
+  هر محصول می‌تواند از صفحه‌ی مدیریت محصول به «تحویل خودکار VPN» تنظیم شود
+  (حجم ترافیک GB + مدت روز، بند ۲۰: Traffic Packages). بعد از پرداخت موفق
+  (کیف‌پول/کد تخفیف/Token — هر سه مسیر)، `try_auto_deliver_vpn` خودکار
+  کاربر را روی پنل مناسب می‌سازد و سفارش COMPLETED می‌شود؛ اگر همه‌ی
+  پنل‌ها Fail شدند، بدون نمایش خطای فنی به کاربر، سفارش در همان صف تحویل
+  دستی موجود (`WAITING_ADMIN`) می‌ماند (بند ۲۷، ۵۸).
+- ✅ «🔐 سرویس‌های VPN من» برای کاربر (بند ۱۸: مشاهده‌ی سرویس‌ها + دریافت
+  دوباره‌ی لینک/کانفیگ).
+- ✅ **Retry با Exponential Backoff** (بند ۲۸): خطای موقت (قطعی اتصال/۵xx)
+  تا ۳ بار روی همان پنل با تاخیر تصاعدی (۱، ۲، ۴ ثانیه) دوباره امتحان
+  می‌شود؛ خطای غیرموقت (Auth/Validation) بدون اتلاف وقت مستقیم به پنل
+  بعدی می‌رود (بند ۲۷: Alternative Provider).
+- ✅ **Auto-Renew کامل** (بند ۱۹): دکمه‌ی «🔄 تمدید» در «سرویس‌های VPN من» -
+  همان اکانت روی همان پنل تمدید می‌شود (لینک/کانفیگ قبلی معتبر می‌ماند)،
+  مبلغ طبق قیمت *فعلیِ* محصول از کیف‌پول کسر می‌شود و اگر تمدید روی پنل
+  شکست بخورد، مبلغ بلافاصله و به‌صورت یک تراکنش Refund مستقل (نه ویرایش)
+  برگردانده می‌شود.
+- ⏳ هنوز نیست: Sanaei Provider، Worker/Queue واقعی برای Retry پس‌زمینه‌ای
+  (فعلاً Retry همزمان و داخل همان درخواست کاربر انجام می‌شود).
+
 ---
 
 ## 🚀 نحوه اجرا (Local / Development)

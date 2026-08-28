@@ -30,10 +30,17 @@ from app.bot.keyboards.admin import (
     admin_category_style_keyboard,
     admin_product_style_keyboard,
     admin_product_type_pick_keyboard,
+    admin_product_vpn_keyboard,
     admin_products_keyboard,
     admin_settings_keyboard,
+    admin_vpn_panel_delete_confirm_keyboard,
+    admin_vpn_panel_detail_keyboard,
+    admin_vpn_panel_type_keyboard,
+    admin_vpn_panels_keyboard,
     button_columns_keyboard,
 )
+from app.core.crypto import mask_secret
+from app.services.vpn_panel_service import VPNPanelService
 from app.bot.keyboards.wallet import admin_deposit_decision_keyboard
 from app.bot.states.admin_states import AdminStates
 from app.config.settings import get_settings
@@ -518,6 +525,113 @@ async def handle_admin_product_pin(callback: CallbackQuery) -> None:
         text, keyboard = await _product_detail_view(session, product)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer("📌 برداشته شد." if is_currently_featured else "📌 پین شد!")
+
+
+# ---------- تحویل خودکار VPN (بند ۷، ۲۰، ۵۷ سند) ----------
+
+
+@router.callback_query(F.data.regexp(r"^admin:product:vpn:\d+$"))
+async def handle_admin_product_vpn_menu(callback: CallbackQuery) -> None:
+    product_id = int(callback.data.split(":")[3])
+    async with get_session() as session:
+        product = await ProductService(session).get(product_id)
+    if not product:
+        await callback.answer("محصول پیدا نشد.", show_alert=True)
+        return
+    status = "✅ فعال" if product.is_vpn_product else "⛔️ غیرفعال"
+    await callback.message.edit_text(
+        f"🔐 <b>تحویل خودکار VPN — {product.name}</b>\n\n"
+        f"وضعیت: {status}\n\n"
+        "اگر فعال باشد، بعد از پرداخت موفق این محصول، بدون دخالت ادمین "
+        "روی یکی از پنل‌های VPN فعال ساخته و تحویل داده می‌شود.",
+        reply_markup=admin_product_vpn_keyboard(product),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:product:vpn:toggle:"))
+async def handle_admin_product_vpn_toggle(callback: CallbackQuery) -> None:
+    product_id = int(callback.data.split(":")[4])
+    async with get_session() as session:
+        product = await ProductService(session).toggle_vpn_enabled(product_id)
+    await callback.message.edit_reply_markup(reply_markup=admin_product_vpn_keyboard(product))
+    await callback.answer("✅ فعال شد" if product.is_vpn_product else "⛔️ غیرفعال شد")
+
+
+@router.callback_query(F.data.startswith("admin:product:vpn:limit:"))
+async def handle_admin_product_vpn_limit_start(callback: CallbackQuery, state: FSMContext) -> None:
+    product_id = int(callback.data.split(":")[4])
+    await state.set_state(AdminStates.WAITING_PRODUCT_VPN_LIMIT)
+    await state.update_data(product_id=product_id)
+    await callback.message.edit_text(
+        "📶 حجم ترافیک را به گیگابایت وارد کنید.\nبرای «نامحدود» عدد 0 را بفرستید.",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_PRODUCT_VPN_LIMIT, F.text)
+async def handle_admin_product_vpn_limit_value(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    raw = message.text.strip()
+    if not raw.isdigit():
+        await message.answer("❗️ یک عدد صحیح و صفر یا بیشتر وارد کنید.")
+        return
+    value = int(raw)
+    data = await state.get_data()
+    async with get_session() as session:
+        try:
+            product = await ProductService(session).update_vpn_data_limit_gb(
+                data.get("product_id"), None if value == 0 else value
+            )
+        except ValueError as e:
+            await message.answer(f"❌ {e}")
+            return
+    await state.clear()
+    await message.answer(
+        f"✅ حجم «{product.name}» به‌روزرسانی شد: "
+        + (f"{value} GB" if value else "نامحدود"),
+        reply_markup=admin_product_vpn_keyboard(product),
+    )
+
+
+@router.callback_query(F.data.startswith("admin:product:vpn:duration:"))
+async def handle_admin_product_vpn_duration_start(callback: CallbackQuery, state: FSMContext) -> None:
+    product_id = int(callback.data.split(":")[4])
+    await state.set_state(AdminStates.WAITING_PRODUCT_VPN_DURATION)
+    await state.update_data(product_id=product_id)
+    await callback.message.edit_text(
+        "📅 مدت اعتبار را به روز وارد کنید.\nبرای «بدون انقضا» عدد 0 را بفرستید.",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_PRODUCT_VPN_DURATION, F.text)
+async def handle_admin_product_vpn_duration_value(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    raw = message.text.strip()
+    if not raw.isdigit():
+        await message.answer("❗️ یک عدد صحیح و صفر یا بیشتر وارد کنید.")
+        return
+    value = int(raw)
+    data = await state.get_data()
+    async with get_session() as session:
+        try:
+            product = await ProductService(session).update_vpn_duration_days(
+                data.get("product_id"), None if value == 0 else value
+            )
+        except ValueError as e:
+            await message.answer(f"❌ {e}")
+            return
+    await state.clear()
+    await message.answer(
+        f"✅ مدت اعتبار «{product.name}» به‌روزرسانی شد: "
+        + (f"{value} روز" if value else "بدون انقضا"),
+        reply_markup=admin_product_vpn_keyboard(product),
+    )
 
 
 @router.callback_query(F.data.regexp(r"^admin:product:discount:\d+$"))
@@ -1503,4 +1617,218 @@ async def handle_admin_orders(callback: CallbackQuery) -> None:
     else:
         text = "📦 <b>سفارش‌های در انتظار تحویل</b>\n\n" + "\n".join(lines)
         await callback.message.edit_text(text, reply_markup=admin_back_keyboard())
+    await callback.answer()
+
+
+# ---------- پنل‌های VPN (Provider Engine - بند ۱۴، ۳۴ سند) ----------
+
+
+def _vpn_panel_detail_text(panel) -> str:
+    health_label = {
+        "ONLINE": "🟢 آنلاین",
+        "DEGRADED": "🟡 کاهش‌کیفیت",
+        "OFFLINE": "🔴 آفلاین",
+        "UNKNOWN": "⚪️ هنوز تست نشده",
+    }.get(panel.last_health_status, "⚪️ نامشخص")
+    checked_at = panel.last_health_checked_at.strftime("%Y-%m-%d %H:%M") if panel.last_health_checked_at else "—"
+    return (
+        f"🔐 <b>{panel.name}</b>\n"
+        f"نوع: <code>{panel.panel_type}</code>\n"
+        f"آدرس: <code>{panel.base_url}</code>\n"
+        f"یوزرنیم: <code>{panel.username}</code>\n"
+        f"وضعیت: {'🟢 فعال' if panel.status == 'ACTIVE' else '⛔️ غیرفعال'}\n"
+        f"اولویت: {panel.priority}\n"
+        f"سلامت آخرین بررسی: {health_label}\n"
+        f"جزئیات: {panel.last_health_detail or '—'}\n"
+        f"زمان بررسی: {checked_at}"
+    )
+
+
+@router.callback_query(F.data == "admin:vpn_panels")
+async def handle_admin_vpn_panels(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    async with get_session() as session:
+        panels = await VPNPanelService(session).list_all()
+    text = "🔐 <b>پنل‌های VPN</b>" if panels else "🔐 <b>پنل‌های VPN</b>\n\nهنوز پنلی ثبت نشده است."
+    await callback.message.edit_text(text, reply_markup=admin_vpn_panels_keyboard(panels))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:vpn_panel:add")
+async def handle_admin_vpn_panel_add_start(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "➕ <b>افزودن پنل VPN</b>\n\nنوع پنل را انتخاب کنید:",
+        reply_markup=admin_vpn_panel_type_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:vpn_panel:add:type:"))
+async def handle_admin_vpn_panel_add_type(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    panel_type = callback.data.split(":")[-1]
+    await state.update_data(vpn_panel_type=panel_type)
+    await state.set_state(AdminStates.WAITING_VPN_PANEL_NAME)
+    await callback.message.edit_text(
+        "1️⃣ یک نام دلخواه برای این پنل بفرست (فقط برای شناسایی داخلی).\n"
+        "مثال: <code>Marzban Server 1</code>",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_VPN_PANEL_NAME, F.text)
+async def handle_vpn_panel_name(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    name = message.text.strip()
+    if not name:
+        await message.answer("❌ نام نمی‌تواند خالی باشد.")
+        return
+    await state.update_data(vpn_panel_name=name[:128])
+    await state.set_state(AdminStates.WAITING_VPN_PANEL_URL)
+    await message.answer(
+        "2️⃣ آدرس کامل پنل را بفرست (با https://).\n"
+        "مثال: <code>https://panel.example.com:8000</code>"
+    )
+
+
+@router.message(AdminStates.WAITING_VPN_PANEL_URL, F.text)
+async def handle_vpn_panel_url(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    url = message.text.strip()
+    if not url.startswith("http://") and not url.startswith("https://"):
+        await message.answer("❌ آدرس باید با http:// یا https:// شروع شود.")
+        return
+    await state.update_data(vpn_panel_url=url)
+    await state.set_state(AdminStates.WAITING_VPN_PANEL_USERNAME)
+    await message.answer("3️⃣ یوزرنیم ادمین پنل را بفرست.")
+
+
+@router.message(AdminStates.WAITING_VPN_PANEL_USERNAME, F.text)
+async def handle_vpn_panel_username(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    username = message.text.strip()
+    if not username:
+        await message.answer("❌ یوزرنیم نمی‌تواند خالی باشد.")
+        return
+    await state.update_data(vpn_panel_username=username)
+    await state.set_state(AdminStates.WAITING_VPN_PANEL_PASSWORD)
+    await message.answer(
+        "4️⃣ پسورد ادمین پنل را بفرست.\n"
+        "⚠️ این مقدار رمزنگاری‌شده ذخیره می‌شود و در پنل ادمین به‌صورت خام نمایش داده نمی‌شود.\n"
+        "بعد از ارسال، پیشنهاد می‌شود پیام حاوی پسورد را از چت حذف کنید."
+    )
+
+
+@router.message(AdminStates.WAITING_VPN_PANEL_PASSWORD, F.text)
+async def handle_vpn_panel_password(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    password = message.text.strip()
+    if not password:
+        await message.answer("❌ پسورد نمی‌تواند خالی باشد.")
+        return
+    data = await state.get_data()
+    await state.clear()
+
+    async with get_session() as session:
+        panel = await VPNPanelService(session).create(
+            name=data["vpn_panel_name"],
+            panel_type=data["vpn_panel_type"],
+            base_url=data["vpn_panel_url"],
+            username=data["vpn_panel_username"],
+            password=password,
+        )
+
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+
+    await message.answer(
+        f"✅ پنل «{panel.name}» اضافه شد.\n"
+        f"یوزرنیم ذخیره‌شده: <code>{mask_secret(panel.username)}</code>\n\n"
+        "برای اطمینان از درست‌بودن اتصال، از «🔄 تست اتصال» استفاده کن.",
+        reply_markup=admin_vpn_panel_detail_keyboard(panel),
+    )
+
+
+@router.callback_query(F.data.startswith("admin:vpn_panel:view:"))
+async def handle_admin_vpn_panel_view(callback: CallbackQuery) -> None:
+    panel_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        panel = await VPNPanelService(session).get(panel_id)
+    if panel is None:
+        await callback.answer("پنل پیدا نشد.", show_alert=True)
+        return
+    await callback.message.edit_text(_vpn_panel_detail_text(panel), reply_markup=admin_vpn_panel_detail_keyboard(panel))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:vpn_panel:test:"))
+async def handle_admin_vpn_panel_test(callback: CallbackQuery) -> None:
+    panel_id = int(callback.data.split(":")[-1])
+    await callback.answer("⏳ در حال تست اتصال...")
+    async with get_session() as session:
+        service = VPNPanelService(session)
+        try:
+            ok, detail = await service.test_connection(panel_id)
+        except ValueError:
+            await callback.answer("پنل پیدا نشد.", show_alert=True)
+            return
+        panel = await service.get(panel_id)
+
+    icon = "✅" if ok else "❌"
+    await callback.message.edit_text(
+        _vpn_panel_detail_text(panel) + f"\n\n{icon} نتیجه‌ی تست: {detail}",
+        reply_markup=admin_vpn_panel_detail_keyboard(panel),
+    )
+
+
+@router.callback_query(F.data.startswith("admin:vpn_panel:toggle:"))
+async def handle_admin_vpn_panel_toggle(callback: CallbackQuery) -> None:
+    panel_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        panel = await VPNPanelService(session).toggle_status(panel_id)
+    await callback.message.edit_text(_vpn_panel_detail_text(panel), reply_markup=admin_vpn_panel_detail_keyboard(panel))
+    await callback.answer("ثبت شد ✅")
+
+
+@router.callback_query(F.data.startswith("admin:vpn_panel:del:"))
+async def handle_admin_vpn_panel_delete_confirm(callback: CallbackQuery) -> None:
+    panel_id = int(callback.data.split(":")[-1])
+    await callback.message.edit_text(
+        "⚠️ آیا از حذف این پنل مطمئنی؟ سرویس‌های ساخته‌شده روی این پنل حذف نمی‌شوند اما دیگر قابل مدیریت از اینجا نیستند.",
+        reply_markup=admin_vpn_panel_delete_confirm_keyboard(panel_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:vpn_panel:delyes:"))
+async def handle_admin_vpn_panel_delete(callback: CallbackQuery) -> None:
+    panel_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        service = VPNPanelService(session)
+        try:
+            await service.delete(panel_id)
+        except ValueError as exc:
+            panel = await service.get(panel_id)
+            await callback.answer(str(exc), show_alert=True)
+            if panel:
+                await callback.message.edit_text(
+                    _vpn_panel_detail_text(panel), reply_markup=admin_vpn_panel_detail_keyboard(panel)
+                )
+            return
+        panels = await service.list_all()
+    await callback.message.edit_text("🗑 پنل حذف شد.", reply_markup=admin_vpn_panels_keyboard(panels))
     await callback.answer()

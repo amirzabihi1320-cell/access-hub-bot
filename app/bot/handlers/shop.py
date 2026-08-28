@@ -14,6 +14,7 @@ from app.database.base import get_session
 from app.services.category_service import CategoryService
 from app.services.coupon_service import CouponError, CouponService
 from app.services.order_service import OrderService, ProductUnavailableError, build_order_report_text
+from app.services.auto_delivery_service import try_auto_deliver_vpn
 from app.services.pricing_service import InvalidQuantityError, apply_discount, calculate_price, is_discount_active
 from app.services.product_service import ProductService
 from app.services.settings_service import SettingsService
@@ -423,6 +424,35 @@ async def handle_buy_with_coupon(callback: CallbackQuery, state: FSMContext) -> 
                 await callback.answer(f"❌ {e}", show_alert=True)
                 return
 
+            auto_delivered, vpn_delivery_text = (False, "")
+            if product and product.is_vpn_product:
+                auto_delivered, vpn_delivery_text = await try_auto_deliver_vpn(session, order, product)
+
+        if auto_delivered:
+            await callback.message.edit_text(
+                f"✅ <b>پرداخت موفق</b>\n\n"
+                f"{product.name} — {order.final_price:,} تومان (با کد {order.coupon_code})\n"
+                f"شماره سفارش: #{order.order_number}\n\n"
+                f"{vpn_delivery_text}",
+            )
+            await callback.answer()
+            await _send_purchase_sticker(callback.bot, callback.message.chat.id)
+            await state.update_data(temp_message_ids=[])
+            try:
+                async with get_session() as session:
+                    report_enabled = await SettingsService(session).is_order_report_enabled()
+            except Exception:
+                report_enabled = True
+            if report_enabled:
+                try:
+                    await callback.bot.send_message(
+                        chat_id=settings.report_channel_id,
+                        text=build_order_report_text(order, product.name),
+                    )
+                except Exception:
+                    pass
+            return
+
         await callback.message.edit_text(
             f"✅ <b>پرداخت موفق</b>\n\n"
             f"{product.name} — {order.final_price:,} تومان (با کد {order.coupon_code})\n"
@@ -506,7 +536,36 @@ async def handle_buy_token(callback: CallbackQuery, state: FSMContext) -> None:
                 await callback.answer(f"❌ {e}", show_alert=True)
                 return
 
+            auto_delivered, vpn_delivery_text = (False, "")
+            if product and product.is_vpn_product:
+                auto_delivered, vpn_delivery_text = await try_auto_deliver_vpn(session, order, product)
+
         token_total = order.token_total or 0
+
+        if auto_delivered:
+            await callback.message.edit_text(
+                f"✅ <b>پرداخت با Token موفق بود</b>\n\n"
+                f"{product.name} — {token_total:,} Token\n"
+                f"شماره سفارش: #{order.order_number}\n\n"
+                f"{vpn_delivery_text}",
+            )
+            await callback.answer()
+            await _send_purchase_sticker(callback.bot, callback.message.chat.id)
+            try:
+                async with get_session() as session:
+                    report_enabled = await SettingsService(session).is_order_report_enabled()
+            except Exception:
+                report_enabled = True
+            if report_enabled:
+                try:
+                    await callback.bot.send_message(
+                        chat_id=settings.report_channel_id,
+                        text=build_order_report_text(order, product.name),
+                    )
+                except Exception:
+                    pass
+            return
+
         await callback.message.edit_text(
             f"✅ <b>پرداخت با Token موفق بود</b>\n\n"
             f"{product.name} — {token_total:,} Token\n"
@@ -580,6 +639,37 @@ async def handle_buy(callback: CallbackQuery, state: FSMContext) -> None:
             except (ProductUnavailableError, InvalidQuantityError, ValueError) as e:
                 await callback.answer(f"❌ {e}", show_alert=True)
                 return
+
+            # تحویل خودکار VPN (بند ۵۷) - فقط اگر محصول is_vpn_product باشد؛
+            # برای بقیه‌ی محصولات هیچ تاثیری ندارد و order.status دست‌نخورده می‌ماند.
+            auto_delivered, vpn_delivery_text = (False, "")
+            if product and product.is_vpn_product:
+                auto_delivered, vpn_delivery_text = await try_auto_deliver_vpn(session, order, product)
+
+        if auto_delivered:
+            await callback.message.edit_text(
+                f"✅ <b>پرداخت موفق</b>\n\n"
+                f"{product.name} — {order.final_price:,} تومان\n"
+                f"شماره سفارش: #{order.order_number}\n\n"
+                f"{vpn_delivery_text}",
+            )
+            await callback.answer()
+            await _send_purchase_sticker(callback.bot, callback.message.chat.id)
+            await state.update_data(temp_message_ids=[])
+            try:
+                async with get_session() as session:
+                    report_enabled = await SettingsService(session).is_order_report_enabled()
+            except Exception:
+                report_enabled = True
+            if report_enabled:
+                try:
+                    await callback.bot.send_message(
+                        chat_id=settings.report_channel_id,
+                        text=build_order_report_text(order, product.name),
+                    )
+                except Exception:
+                    pass
+            return
 
         await callback.message.edit_text(
             f"✅ <b>پرداخت موفق</b>\n\n"

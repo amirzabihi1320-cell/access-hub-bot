@@ -3,7 +3,7 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.bot.keyboards.membership import membership_keyboard
-from app.bot.keyboards.reply_menu import main_reply_keyboard
+from app.bot.keyboards.reply_menu import answer_with_main_menu
 from app.config.settings import get_settings
 from app.database.base import get_session
 from app.services.membership_service import MembershipService
@@ -87,7 +87,7 @@ async def handle_start(message: Message, command: CommandObject | None = None) -
         except Exception:
             pass
 
-    await message.answer(text, reply_markup=main_reply_keyboard(menu_icons))
+    await answer_with_main_menu(message, text, menu_icons)
 
     if bonus_result and bonus_result.get("referral_bonus") and bonus_result.get("referrer_telegram_id"):
         try:

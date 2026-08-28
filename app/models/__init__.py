@@ -15,3 +15,6 @@ from app.models.inventory_code import InventoryCode  # noqa: F401
 from app.models.game import Game, TokenTransaction, PlatformTokenTransaction, GameEvent, GameReaction  # noqa: F401
 from app.models.tournament import Tournament, TournamentParticipant  # noqa: F401
 from app.models.discount_coupon import DiscountCoupon  # noqa: F401
+
+from app.models.vpn_panel import VPNPanel  # noqa: F401
+from app.models.vpn_service import VPNService  # noqa: F401

@@ -53,6 +53,9 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments", style=ButtonStyle.PRIMARY),
         ],
         [
+            InlineKeyboardButton(text="🔐 پنل‌های VPN", callback_data="admin:vpn_panels", style=ButtonStyle.PRIMARY),
+        ],
+        [
             InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast", style=ButtonStyle.PRIMARY),
             InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings", style=ButtonStyle.PRIMARY),
         ],
@@ -214,8 +217,27 @@ def admin_product_detail_keyboard(product, is_featured: bool = False) -> InlineK
             ],
             [InlineKeyboardButton(text=discount_label, callback_data=f"admin:product:discount:{product.id}", style=ButtonStyle.PRIMARY)],
             [InlineKeyboardButton(text=pin_label, callback_data=f"admin:product:pin:{product.id}", style=ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton(
+                text=("🔐 تحویل خودکار VPN: فعال (تنظیم)" if product.is_vpn_product else "🔐 فعال‌سازی تحویل خودکار VPN"),
+                callback_data=f"admin:product:vpn:{product.id}",
+                style=ButtonStyle.SUCCESS if product.is_vpn_product else ButtonStyle.PRIMARY,
+            )],
             [InlineKeyboardButton(text="🗑 حذف محصول", callback_data=f"admin:product:del:{product.id}", style=ButtonStyle.DANGER)],
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:products", style=ButtonStyle.DANGER)],
+        ]
+    )
+
+
+def admin_product_vpn_keyboard(product) -> InlineKeyboardMarkup:
+    toggle_text = "⛔️ غیرفعال کردن تحویل خودکار VPN" if product.is_vpn_product else "✅ فعال کردن تحویل خودکار VPN"
+    limit_text = f"📶 حجم: {product.vpn_data_limit_gb} GB" if product.vpn_data_limit_gb else "📶 حجم: نامحدود (تغییر)"
+    duration_text = f"📅 مدت: {product.vpn_duration_days} روز" if product.vpn_duration_days else "📅 مدت: نامحدود (تغییر)"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=toggle_text, callback_data=f"admin:product:vpn:toggle:{product.id}")],
+            [InlineKeyboardButton(text=limit_text, callback_data=f"admin:product:vpn:limit:{product.id}")],
+            [InlineKeyboardButton(text=duration_text, callback_data=f"admin:product:vpn:duration:{product.id}")],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"admin:product:view:{product.id}")],
         ]
     )
 
@@ -293,6 +315,64 @@ def admin_channels_keyboard(channels) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="➕ افزودن کانال", callback_data="admin:channel:add")])
     rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+HEALTH_ICONS = {
+    "ONLINE": "🟢",
+    "DEGRADED": "🟡",
+    "OFFLINE": "🔴",
+    "UNKNOWN": "⚪️",
+}
+
+
+def admin_vpn_panels_keyboard(panels) -> InlineKeyboardMarkup:
+    rows = []
+    for panel in panels:
+        status_mark = "🟢" if panel.status == "ACTIVE" else "⛔️"
+        health_mark = HEALTH_ICONS.get(panel.last_health_status, "⚪️")
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{status_mark}{health_mark} {panel.name} ({panel.panel_type})",
+                    callback_data=f"admin:vpn_panel:view:{panel.id}",
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="➕ افزودن پنل VPN", callback_data="admin:vpn_panel:add")])
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_vpn_panel_type_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Marzban", callback_data="admin:vpn_panel:add:type:MARZBAN")],
+            [InlineKeyboardButton(text="🔙 انصراف", callback_data="admin:vpn_panels")],
+        ]
+    )
+
+
+def admin_vpn_panel_detail_keyboard(panel) -> InlineKeyboardMarkup:
+    toggle_text = "⛔️ غیرفعال کن" if panel.status == "ACTIVE" else "🟢 فعال کن"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 تست اتصال", callback_data=f"admin:vpn_panel:test:{panel.id}")],
+            [InlineKeyboardButton(text=toggle_text, callback_data=f"admin:vpn_panel:toggle:{panel.id}")],
+            [InlineKeyboardButton(text="🗑 حذف پنل", callback_data=f"admin:vpn_panel:del:{panel.id}")],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:vpn_panels")],
+        ]
+    )
+
+
+def admin_vpn_panel_delete_confirm_keyboard(panel_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ بله، حذف کن", callback_data=f"admin:vpn_panel:delyes:{panel_id}"),
+                InlineKeyboardButton(text="❌ انصراف", callback_data=f"admin:vpn_panel:view:{panel_id}"),
+            ]
+        ]
+    )
 
 
 def button_columns_keyboard(back_callback: str) -> InlineKeyboardMarkup:

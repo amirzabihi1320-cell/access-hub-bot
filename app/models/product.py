@@ -48,6 +48,16 @@ class Product(Base):
     discount_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
     discount_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # ---------- VPN Engine (بند ۷، ۸، ۲۰، ۵۷ سند) ----------
+    # اگر فعال باشد، بعد از پرداخت موفق این محصول به‌جای تحویل دستی،
+    # به‌صورت خودکار روی یکی از پنل‌های VPN فعال ساخته و تحویل داده
+    # می‌شود (app/services/auto_delivery_service.py). محصول (Traffic/Duration)
+    # عمداً مستقل از این‌که کدام پنل واقعاً استفاده می‌شود نگه داشته شده -
+    # انتخاب پنل کار VPNProvisioningService است (بند ۱۱: Smart Panel Selection).
+    is_vpn_product: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    vpn_data_limit_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = نامحدود
+    vpn_duration_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = بدون انقضا
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

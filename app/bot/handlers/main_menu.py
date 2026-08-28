@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.bot.handlers.account import build_account_view
-from app.bot.handlers.orders import build_orders_view
+from app.bot.handlers.orders import build_orders_view, list_vpn_services_for_user, vpn_services_entry_keyboard
 from app.bot.handlers.shop import build_categories_view
 from app.bot.handlers.wallet import build_wallet_view
 from app.bot.keyboards.reply_menu import (
@@ -16,8 +16,8 @@ from app.bot.keyboards.reply_menu import (
     SHOP,
     SUPPORT,
     WALLET,
+    answer_with_main_menu,
     home_reply_keyboard,
-    main_reply_keyboard,
 )
 from app.config.settings import get_settings
 from app.database.base import get_session
@@ -103,8 +103,14 @@ async def handle_orders_entry(message: Message, state: FSMContext) -> None:
 
     async with get_session() as session:
         text = await build_orders_view(session, message.from_user)
+        user = await UserService(session).get_or_create(
+            message.from_user.id, message.from_user.username, message.from_user.first_name,
+            message.from_user.last_name,
+        )
+        has_vpn_services = bool(await list_vpn_services_for_user(session, user.id))
 
-    await manager.send(text)
+    keyboard = vpn_services_entry_keyboard() if has_vpn_services else None
+    await manager.send(text, reply_markup=keyboard)
 
 
 @router.message(F.text == LEADERBOARD)
@@ -203,4 +209,4 @@ async def handle_home(message: Message, state: FSMContext) -> None:
     await manager.cleanup_temp()
 
     text = await _welcome_text()
-    await message.answer(text, reply_markup=main_reply_keyboard(await _menu_icons()))
+    await answer_with_main_menu(message, text, await _menu_icons())
