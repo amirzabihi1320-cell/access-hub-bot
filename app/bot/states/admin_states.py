@@ -33,6 +33,7 @@ class AdminStates(StatesGroup):
     WAITING_VPN_PANEL_URL = State()
     WAITING_VPN_PANEL_USERNAME = State()
     WAITING_VPN_PANEL_PASSWORD = State()
+    WAITING_VPN_PANEL_INBOUND_ID = State()
 
     WAITING_PRODUCT_VPN_LIMIT = State()
     WAITING_PRODUCT_VPN_DURATION = State()

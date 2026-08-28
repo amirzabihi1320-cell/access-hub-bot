@@ -12,7 +12,6 @@ VPN Purchase، بند ۱۹: Auto Renew).
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -20,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import VPNServiceStatus
+from app.core.retry import retry_provider_call
 from app.models.vpn_panel import VPNPanel
 from app.models.vpn_service import VPNService
 from app.providers.exceptions import ProviderError
@@ -56,21 +56,19 @@ class VPNProvisioningService:
 
     async def _call_with_retry(self, func, *args, **kwargs):
         """
-        نسخه‌ی عمومی _create_user_with_retry برای هر متد Providerی که ممکن
-        است خطای موقت بدهد (create_user، modify_user و ...).
+        Retry واقعی حالا در app/core/retry.py متمرکز شده (Provider-agnostic،
+        قابل استفاده برای هر Provider آینده - VPN یا Payment). این متد فقط
+        RETRY_DELAYS_SECONDS مخصوص VPNProvisioningService را به همان تابع
+        عمومی وصل می‌کند تا کلاس‌های فرزند/تست بتوانند تایمینگ را override کنند.
         """
-        last_error: ProviderError | None = None
-        for attempt, delay in enumerate((0.0, *self.RETRY_DELAYS_SECONDS)):
-            if delay:
-                logger.info("VPN provider call retry #%d in %.0fs (previous error: %s)", attempt, delay, last_error)
-                await asyncio.sleep(delay)
-            try:
-                return await func(*args, **kwargs)
-            except ProviderError as exc:
-                last_error = exc
-                if not exc.retryable:
-                    raise
-        raise last_error
+        max_attempts = 1 + len(self.RETRY_DELAYS_SECONDS)
+        base_delay = self.RETRY_DELAYS_SECONDS[0] if self.RETRY_DELAYS_SECONDS else 1.0
+        return await retry_provider_call(
+            lambda: func(*args, **kwargs),
+            max_attempts=max_attempts,
+            base_delay_seconds=base_delay,
+            context=getattr(func, "__name__", "vpn_provider_call"),
+        )
 
     async def _create_user_with_retry(self, provider: BaseVPNProvider, params: VPNUserCreateParams):
         """

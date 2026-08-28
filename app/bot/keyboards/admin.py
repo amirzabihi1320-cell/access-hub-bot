@@ -347,6 +347,7 @@ def admin_vpn_panel_type_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Marzban", callback_data="admin:vpn_panel:add:type:MARZBAN")],
+            [InlineKeyboardButton(text="Sanaei / 3x-UI", callback_data="admin:vpn_panel:add:type:SANAEI")],
             [InlineKeyboardButton(text="🔙 انصراف", callback_data="admin:vpn_panels")],
         ]
     )

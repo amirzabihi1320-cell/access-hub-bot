@@ -324,7 +324,7 @@ async def test_auto_renew_provider_failure_refunds_wallet(session: AsyncSession,
         return None
 
     monkeypatch.setattr(VPNPanelService, "build_provider", lambda self, panel: _FailingRenewProvider())
-    monkeypatch.setattr("app.services.vpn_provisioning_service.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("app.core.retry.asyncio.sleep", _no_sleep)
 
     ok, text = await try_auto_renew_vpn(session, user.id, service.id)
 

@@ -1631,11 +1631,15 @@ def _vpn_panel_detail_text(panel) -> str:
         "UNKNOWN": "⚪️ هنوز تست نشده",
     }.get(panel.last_health_status, "⚪️ نامشخص")
     checked_at = panel.last_health_checked_at.strftime("%Y-%m-%d %H:%M") if panel.last_health_checked_at else "—"
+    inbound_line = (
+        f"Inbound پیش‌فرض: {panel.default_inbound_id}\n" if panel.panel_type == "SANAEI" else ""
+    )
     return (
         f"🔐 <b>{panel.name}</b>\n"
         f"نوع: <code>{panel.panel_type}</code>\n"
         f"آدرس: <code>{panel.base_url}</code>\n"
         f"یوزرنیم: <code>{panel.username}</code>\n"
+        f"{inbound_line}"
         f"وضعیت: {'🟢 فعال' if panel.status == 'ACTIVE' else '⛔️ غیرفعال'}\n"
         f"اولویت: {panel.priority}\n"
         f"سلامت آخرین بررسی: {health_label}\n"
@@ -1738,6 +1742,41 @@ async def handle_vpn_panel_password(message: Message, state: FSMContext) -> None
     if not password:
         await message.answer("❌ پسورد نمی‌تواند خالی باشد.")
         return
+    await state.update_data(vpn_panel_password=password)
+
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+
+    data = await state.get_data()
+    if data.get("vpn_panel_type") == "SANAEI":
+        await state.set_state(AdminStates.WAITING_VPN_PANEL_INBOUND_ID)
+        await message.answer(
+            "5️⃣ شماره‌ی Inbound که کلاینت‌ها روی آن ساخته شوند رو بفرست "
+            "(از پنل، صفحه‌ی Inbounds قابل مشاهده‌ست).\n"
+            "اگه فقط یک Inbound داری یا مطمئن نیستی، عدد <code>0</code> بفرست "
+            "تا خودکار اولین Inbound فعال انتخاب بشه."
+        )
+        return
+
+    await _finalize_vpn_panel_creation(message, state)
+
+
+@router.message(AdminStates.WAITING_VPN_PANEL_INBOUND_ID, F.text)
+async def handle_vpn_panel_inbound_id(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    raw = message.text.strip()
+    if not raw.lstrip("-").isdigit():
+        await message.answer("❌ یک عدد بفرست (یا 0 برای انتخاب خودکار).")
+        return
+    inbound_id = int(raw)
+    await state.update_data(vpn_panel_inbound_id=(inbound_id or None))
+    await _finalize_vpn_panel_creation(message, state)
+
+
+async def _finalize_vpn_panel_creation(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.clear()
 
@@ -1747,13 +1786,9 @@ async def handle_vpn_panel_password(message: Message, state: FSMContext) -> None
             panel_type=data["vpn_panel_type"],
             base_url=data["vpn_panel_url"],
             username=data["vpn_panel_username"],
-            password=password,
+            password=data["vpn_panel_password"],
+            default_inbound_id=data.get("vpn_panel_inbound_id"),
         )
-
-    try:
-        await message.delete()
-    except TelegramBadRequest:
-        pass
 
     await message.answer(
         f"✅ پنل «{panel.name}» اضافه شد.\n"

@@ -57,8 +57,18 @@ Broadcast/Audit Log (فاز ۷)، Telegram Stars (فاز ۸).
   مبلغ طبق قیمت *فعلیِ* محصول از کیف‌پول کسر می‌شود و اگر تمدید روی پنل
   شکست بخورد، مبلغ بلافاصله و به‌صورت یک تراکنش Refund مستقل (نه ویرایش)
   برگردانده می‌شود.
-- ⏳ هنوز نیست: Sanaei Provider، Worker/Queue واقعی برای Retry پس‌زمینه‌ای
-  (فعلاً Retry همزمان و داخل همان درخواست کاربر انجام می‌شود).
+- ✅ **Sanaei/3x-UI Provider کامل** (`app/providers/vpn/sanaei.py`، بند ۱۳):
+  Login با Session Cookie، Create/Get/Modify/Delete/Enable/Disable/Reset
+  Traffic کلاینت. برخلاف Marzban که هر کاربر Username یکتا دارد، در
+  X-UI هر کلاینت با UUID داخل یک Inbound شناسایی می‌شود؛ برای سازگاری
+  با رابط عمومی VPN Engine، UUID به‌صورت Deterministic (uuid5) از روی
+  همان username تولید می‌شود - نیازی به ذخیره‌ی جداگانه نیست. هر پنل
+  می‌تواند یک `default_inbound_id` داشته باشد (اختیاری - در غیر این
+  صورت اولین Inbound فعال خودکار انتخاب می‌شود).
+- ⏳ هنوز نیست: Worker/Queue واقعی برای Retry پس‌زمینه‌ای (فعلاً Retry
+  همزمان و داخل همان درخواست کاربر انجام می‌شود)، Revoke UUID برای
+  X-UI (معماری متفاوت این پنل اجازه‌ی Revoke ساده نمی‌دهد - نیاز به
+  Delete+Recreate در سطح بالاتر دارد).
 
 ---
 

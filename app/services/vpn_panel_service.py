@@ -46,6 +46,7 @@ class VPNPanelService:
         username: str,
         password: str,
         priority: int = 100,
+        default_inbound_id: int | None = None,
     ) -> VPNPanel:
         panel = VPNPanel(
             name=name.strip()[:128],
@@ -54,6 +55,7 @@ class VPNPanelService:
             username=username.strip(),
             password_encrypted=encrypt_secret(password),
             priority=priority,
+            default_inbound_id=default_inbound_id,
         )
         self.session.add(panel)
         await self.session.commit()
@@ -93,6 +95,7 @@ class VPNPanelService:
             base_url=panel.base_url,
             username=panel.username,
             password=decrypt_secret(panel.password_encrypted),
+            default_inbound_id=panel.default_inbound_id,
         )
 
     async def test_connection(self, panel_id: int) -> tuple[bool, str]:

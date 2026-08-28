@@ -29,6 +29,12 @@ class VPNPanel(Base):
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)  # کوچک‌تر = اولویت بالاتر
     max_users: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = بدون محدودیت اعلامی
 
+    # فقط برای پنل‌های خانواده‌ی X-UI/Sanaei معنا دارد: کدام Inbound برای
+    # ساخت کلاینت استفاده شود. اگر خالی باشد، Provider اولین Inbound فعال
+    # پنل را خودکار انتخاب می‌کند (کافی برای پنل‌های تک‌Inbound که رایج‌ترین
+    # حالت استفاده است).
+    default_inbound_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # آخرین نتیجه‌ی Health Check (کش شده تا هر انتخاب پنل، درخواست جدید نزند).
     last_health_status: Mapped[str] = mapped_column(String(16), nullable=False, default=HealthStatus.UNKNOWN.value)
     last_health_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)

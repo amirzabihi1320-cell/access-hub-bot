@@ -12,10 +12,11 @@ from __future__ import annotations
 from app.core.enums import VPNPanelType
 from app.providers.vpn.base import BaseVPNProvider
 from app.providers.vpn.marzban import MarzbanProvider
+from app.providers.vpn.sanaei import SanaeiProvider
 
 VPN_PROVIDERS: dict[str, type[BaseVPNProvider]] = {
     VPNPanelType.MARZBAN.value: MarzbanProvider,
-    # VPNPanelType.SANAEI.value: SanaeiProvider,  # فاز بعد - پیاده‌سازی کامل طبق بند ۱۳
+    VPNPanelType.SANAEI.value: SanaeiProvider,
 }
 
 
@@ -29,6 +30,7 @@ def build_vpn_provider(
     base_url: str,
     username: str,
     password: str,
+    default_inbound_id: int | None = None,
 ) -> BaseVPNProvider:
     """
     یک نمونه‌ی Provider آماده‌ی استفاده برمی‌گرداند. فراخوان مسئول
@@ -41,4 +43,7 @@ def build_vpn_provider(
             f"نوع پنل «{panel_type}» هنوز پیاده‌سازی نشده است. "
             f"پنل‌های پشتیبانی‌شده: {', '.join(VPN_PROVIDERS.keys())}"
         )
-    return provider_cls(base_url=base_url, username=username, password=password)
+    kwargs = {"base_url": base_url, "username": username, "password": password}
+    if provider_cls is SanaeiProvider:
+        kwargs["default_inbound_id"] = default_inbound_id
+    return provider_cls(**kwargs)
