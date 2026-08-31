@@ -102,20 +102,5 @@ class BaseVPNProvider(BaseProvider):
         return {}
 
     async def reset_traffic(self, username: str) -> VPNUserInfo:
-        """
-        شمارنده‌ی ترافیک مصرفی کاربر را صفر می‌کند (بدون تغییر Data Limit یا
-        Expire). استفاده‌ی اصلی: تمدید سرویس (بند ۱۹) - بعد از تمدید، کاربر
-        باید یک سیکل مصرف تازه داشته باشد. پنل‌هایی که این قابلیت را ندارند
-        NotImplementedError برمی‌گردانند و VPNProvisioningService این را
-        Best-effort در نظر می‌گیرد (شکست این مرحله کل تمدید را Fail نمی‌کند).
-        """
-        raise NotImplementedError
-
-    async def reset_traffic(self, username: str) -> None:
-        """
-        مصرف ترافیک کاربر را صفر می‌کند (برای Auto-Renew - بند ۱۹: در شروع
-        دوره‌ی جدید، مصرف قبلی نباید باقی بماند). پنل‌هایی که این قابلیت
-        را ندارند NotImplementedError برمی‌گردانند و فراخوان (VPNRenewalService)
-        این حالت را نادیده می‌گیرد - Extend انجام می‌شود ولی مصرف قدیم صفر نمی‌شود.
-        """
+        """Reset the provider-side traffic counter and return fresh user info."""
         raise NotImplementedError

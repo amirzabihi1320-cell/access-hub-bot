@@ -93,6 +93,26 @@ async def health_check(_: web.Request) -> web.Response:
     """Render/هر پلتفرمی برای بررسی زنده‌بودن سرویس به این مسیر درخواست می‌زند."""
     return web.Response(text="Access Hub bot is running.")
 
+async def tronado_webhook(request: web.Request) -> web.Response:
+    """Receive and verify Tronado IPN using the raw request body.
+
+    The signature is checked before JSON parsing/financial settlement.
+    Duplicate callbacks are safe because PaymentService uses the payment_id
+    and a unique wallet ledger reference.
+    """
+    from app.database.base import get_session
+    from app.services.payment_service import PaymentService
+
+    raw_body = await request.read()
+    signature = request.headers.get("X-Tronado-Sig", "")
+    try:
+        async with get_session() as session:
+            await PaymentService(session).handle_tronado_webhook(raw_body, signature)
+    except Exception as exc:
+        logger.warning("Tronado webhook rejected/failed: %s", exc)
+        return web.json_response({"ok": False, "error": "invalid_or_unprocessed_webhook"}, status=400)
+    return web.json_response({"ok": True})
+
 
 async def run_webhook() -> None:
     """
@@ -120,6 +140,7 @@ async def run_webhook() -> None:
 
     app = web.Application()
     app.router.add_get("/", health_check)
+    app.router.add_post("/payments/tronado/webhook", tronado_webhook)
 
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.webhook_path)
     setup_application(app, dp, bot=bot)

@@ -722,3 +722,65 @@ async def handle_admin_reject(
 
         except Exception:
             pass
+
+# =========================================================
+# شارژ خودکار ریالی با Tronado → تسویه TRX برای صاحب فروشگاه
+# =========================================================
+
+from app.bot.states.payment_states import CryptoPaymentStates
+from app.services.payment_service import PaymentService
+
+
+@router.callback_query(F.data == "wallet:deposit:tronado")
+async def handle_tronado_deposit_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(CryptoPaymentStates.WAITING_TRX_DEPOSIT_AMOUNT)
+    await callback.message.edit_text(
+        "⚡️ <b>شارژ خودکار کیف پول</b>\n\n"
+        "مبلغ را به تومان وارد کنید.\n"
+        "بعد از ساخت فاکتور، وارد صفحه پرداخت Tronado می‌شوید و پس از تأیید خودکار، کیف پولتان شارژ می‌شود.\n\n"
+        "مثال:\n<code>500000</code>",
+        reply_markup=deposit_cancel_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(CryptoPaymentStates.WAITING_TRX_DEPOSIT_AMOUNT, F.text)
+async def handle_tronado_deposit_amount(message: Message, state: FSMContext) -> None:
+    raw = message.text.strip().replace(",", "").replace("٬", "").replace(" ", "")
+    if not raw.isdigit() or int(raw) <= 0:
+        await message.answer("❗️ لطفاً مبلغ را به‌صورت عدد صحیح و مثبت وارد کنید.")
+        return
+
+    amount = int(raw)
+    if amount < 10_000:
+        await message.answer("❗️ حداقل مبلغ این روش ۱۰٬۰۰۰ تومان است.")
+        return
+
+    async with get_session() as session:
+        user = await _get_user(session, message.from_user)
+        try:
+            payment = await PaymentService(session).create_tronado_wallet_deposit(user.id, amount)
+        except Exception:
+            await state.clear()
+            await message.answer(
+                "❌ در حال حاضر ساخت فاکتور پرداخت ممکن نیست.\n"
+                "لطفاً کمی بعد دوباره امتحان کنید یا از شارژ دستی استفاده کنید."
+            )
+            return
+
+    await state.clear()
+    buttons = []
+    if payment.payment_url:
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        buttons.append([InlineKeyboardButton(text="⚡️ پرداخت امن", url=payment.payment_url)])
+    buttons.append([InlineKeyboardButton(text="🔙 کیف پول", callback_data="wallet:menu")])
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons)
+    trx_text = payment.asset_amount or "—"
+    await message.answer(
+        "⚡️ <b>فاکتور پرداخت ساخته شد</b>\n\n"
+        f"💰 مبلغ: <b>{amount:,} تومان</b>\n"
+        f"🪙 مقدار تقریبی: <b>{trx_text} TRX</b>\n\n"
+        "بعد از پرداخت، تأیید به‌صورت خودکار انجام می‌شود و موجودی کیف پولت شارژ خواهد شد.\n"
+        "⚠️ فقط از همان لینک پرداخت استفاده کن و مبلغ را دستی تغییر نده.",
+        reply_markup=markup,
+    )

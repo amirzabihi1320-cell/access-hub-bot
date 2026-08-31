@@ -18,3 +18,5 @@ from app.models.discount_coupon import DiscountCoupon  # noqa: F401
 
 from app.models.vpn_panel import VPNPanel  # noqa: F401
 from app.models.vpn_service import VPNService  # noqa: F401
+
+from app.models.payment_transaction import PaymentTransaction  # noqa: F401

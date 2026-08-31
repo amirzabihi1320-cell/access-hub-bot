@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     # کلید موقت تولید می‌شود (با هشدار در لاگ).
     panel_encryption_key: str = Field("", alias="PANEL_ENCRYPTION_KEY")
 
+    # --- Tronado payment provider ---
+    tronado_api_key: str = Field("", alias="TRONADO_API_KEY")
+    tronado_ipn_signing_key: str = Field("", alias="TRONADO_IPN_SIGNING_KEY")
+    tronado_wallet_address: str = Field("", alias="TRONADO_WALLET_ADDRESS")
+    tronado_base_url: str = Field("https://bot.tronado.cloud", alias="TRONADO_BASE_URL")
+    tronado_wage_from_business_percentage: int = Field(0, alias="TRONADO_WAGE_FROM_BUSINESS_PERCENTAGE")
+    tronado_callback_url: str | None = Field(None, alias="TRONADO_CALLBACK_URL")
+
     # --- Access Hub Game System ---
     game_chat_id: int | None = Field(None, alias="GAME_CHAT_ID")
     game_expiration_seconds: int = Field(900, alias="GAME_EXPIRATION_SECONDS")

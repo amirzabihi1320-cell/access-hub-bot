@@ -196,3 +196,10 @@ Handler فقط پیام تلگرام را می‌گیرد → Service را صد�
 - Admin can change each item's button color from its management screen.
 - Button layout remains per-item: full-width (1) or two columns (2).
 - Shop category/product buttons use an enlarged two-line visual style so their rendered size is substantially larger on Telegram mobile; Telegram does not expose pixel width/height for InlineKeyboardButton.
+
+## Automatic TRX payment (Tronado)
+
+Access Hub includes a Tronado payment adapter for automatic wallet deposits. See
+`PAYMENT_SETUP.md` for the required environment variables and webhook setup.
+The integration is server-to-server and verifies Tronado's signed IPN before crediting
+an internal wallet. It does not attempt to control `@tronadorobot` as a Telegram user/bot.

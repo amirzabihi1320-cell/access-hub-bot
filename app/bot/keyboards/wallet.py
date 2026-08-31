@@ -8,7 +8,11 @@ def wallet_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="💳 شارژ ریالی",
                     callback_data="wallet:deposit:rial",
-                )
+                ),
+                InlineKeyboardButton(
+                    text="⚡️ پرداخت خودکار",
+                    callback_data="wallet:deposit:tronado",
+                ),
             ],
             [
                 InlineKeyboardButton(

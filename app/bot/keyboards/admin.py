@@ -54,6 +54,7 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🔐 پنل‌های VPN", callback_data="admin:vpn_panels", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="⚡️ پرداخت‌ها", callback_data="admin:payments", style=ButtonStyle.PRIMARY),
         ],
         [
             InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast", style=ButtonStyle.PRIMARY),

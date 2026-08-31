@@ -111,6 +111,26 @@ async def handle_admin_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "admin:payments")
+async def handle_admin_payments(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    s = get_settings()
+    configured = bool(s.tronado_api_key and s.tronado_ipn_signing_key and s.tronado_wallet_address)
+    callback_url = s.tronado_callback_url or ((s.webhook_base_url or "").rstrip("/") + "/payments/tronado/webhook")
+    text = (
+        "⚡️ <b>درگاه‌ها و پرداخت خودکار</b>\n\n"
+        f"Tronado: {'🟢 آماده اتصال' if configured else '🔴 ناقص'}\n"
+        f"Wallet مقصد TRX: {'✅ تنظیم شده' if s.tronado_wallet_address else '❌ تنظیم نشده'}\n"
+        f"IPN Signing Key: {'✅ تنظیم شده' if s.tronado_ipn_signing_key else '❌ تنظیم نشده'}\n"
+        f"Callback: <code>{callback_url or 'تنظیم نشده'}</code>\n\n"
+        "کلیدهای امنیتی در .env نگهداری می‌شوند و از داخل تلگرام نمایش داده نمی‌شوند."
+    )
+    await callback.message.edit_text(text, reply_markup=admin_back_keyboard())
+    await callback.answer()
+
+
 @router.callback_query(F.data == "admin:stats")
 async def handle_admin_stats(callback: CallbackQuery) -> None:
     if not _is_admin(callback.from_user.id):
