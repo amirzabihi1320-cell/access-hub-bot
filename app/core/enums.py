@@ -119,3 +119,46 @@ class VPNServiceStatus(str, enum.Enum):
     EXPIRED = "EXPIRED"
     DISABLED = "DISABLED"
     ERROR = "ERROR"
+
+
+# ---------- Crypto Payment Engine (TRON/Tronado - ماژول اضافه) ----------
+
+
+class PaymentProviderType(str, enum.Enum):
+    """
+    نوع Payment Provider خارجی (غیر از درگاه ریالی/کارت‌به‌کارت داخلی).
+    اضافه‌کردن Provider جدید = ۱) مقدار اینجا، ۲) کلاس در app/providers/payment/،
+    ۳) ثبت در registry.py. دقیقاً همان الگوی VPNPanelType.
+    """
+    TRONADO = "TRONADO"
+
+
+class PaymentProviderStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"
+    ERROR = "ERROR"
+
+
+class CryptoCurrency(str, enum.Enum):
+    """بند ۳ سند: هر ارز Ledger مستقل خودش را دارد."""
+    TRX = "TRX"
+    TON = "TON"  # فعلاً فقط تعریف Enum - Wallet/Provider آن در فاز بعد پیاده می‌شود
+
+
+class CryptoWalletTxType(str, enum.Enum):
+    DEPOSIT = "DEPOSIT"
+    ADMIN_ADJUSTMENT = "ADMIN_ADJUSTMENT"
+    CONVERSION_OUT = "CONVERSION_OUT"  # فاز بعد (TRX -> TON)
+    CONVERSION_IN = "CONVERSION_IN"    # فاز بعد
+    WITHDRAWAL = "WITHDRAWAL"
+
+
+class CryptoDepositStatus(str, enum.Enum):
+    """State Machine سفارش واریز TRX (بند ۱۷ سند - نسخه‌ی محدود به Deposit)."""
+    CREATED = "CREATED"
+    PENDING_PAYMENT = "PENDING_PAYMENT"
+    PAID = "PAID"
+    VERIFIED = "VERIFIED"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+    MANUAL_REVIEW = "MANUAL_REVIEW"

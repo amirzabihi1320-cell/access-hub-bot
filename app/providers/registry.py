@@ -9,7 +9,9 @@ Registry مرکزی Provider Engine.
 """
 from __future__ import annotations
 
-from app.core.enums import VPNPanelType
+from app.core.enums import PaymentProviderType, VPNPanelType
+from app.providers.payment.base import BasePaymentProvider
+from app.providers.payment.tronado import TronadoProvider
 from app.providers.vpn.base import BaseVPNProvider
 from app.providers.vpn.marzban import MarzbanProvider
 from app.providers.vpn.sanaei import SanaeiProvider
@@ -17,6 +19,12 @@ from app.providers.vpn.sanaei import SanaeiProvider
 VPN_PROVIDERS: dict[str, type[BaseVPNProvider]] = {
     VPNPanelType.MARZBAN.value: MarzbanProvider,
     VPNPanelType.SANAEI.value: SanaeiProvider,
+}
+
+# افزودن Provider پرداخت جدید (TON و ...): ۱) کلاس در app/providers/payment/،
+# ۲) این‌جا ثبت کن. هیچ فایل دیگری (Wallet/Order Engine) نیازی به تغییر ندارد.
+PAYMENT_PROVIDERS: dict[str, type[BasePaymentProvider]] = {
+    PaymentProviderType.TRONADO.value: TronadoProvider,
 }
 
 
@@ -47,3 +55,21 @@ def build_vpn_provider(
     if provider_cls is SanaeiProvider:
         kwargs["default_inbound_id"] = default_inbound_id
     return provider_cls(**kwargs)
+
+
+class UnsupportedPaymentProviderError(Exception):
+    pass
+
+
+def build_payment_provider(provider_type: str, *, api_key: str, api_url: str) -> BasePaymentProvider:
+    """
+    مشابه build_vpn_provider - فراخوان مسئول ``await provider.close()``
+    بعد از اتمام کار است.
+    """
+    provider_cls = PAYMENT_PROVIDERS.get(provider_type)
+    if provider_cls is None:
+        raise UnsupportedPaymentProviderError(
+            f"Payment Provider «{provider_type}» پشتیبانی نمی‌شود. "
+            f"پشتیبانی‌شده‌ها: {', '.join(PAYMENT_PROVIDERS.keys())}"
+        )
+    return provider_cls(api_key=api_key, api_url=api_url)

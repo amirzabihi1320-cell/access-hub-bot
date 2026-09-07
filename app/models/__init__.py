@@ -19,4 +19,6 @@ from app.models.discount_coupon import DiscountCoupon  # noqa: F401
 from app.models.vpn_panel import VPNPanel  # noqa: F401
 from app.models.vpn_service import VPNService  # noqa: F401
 
-from app.models.payment_transaction import PaymentTransaction  # noqa: F401
+from app.models.payment_provider_config import PaymentProviderConfig  # noqa: F401
+from app.models.crypto_wallet import CryptoWallet, CryptoWalletTransaction  # noqa: F401
+from app.models.crypto_deposit import CryptoDepositOrder  # noqa: F401
