@@ -54,7 +54,7 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🔐 پنل‌های VPN", callback_data="admin:vpn_panels", style=ButtonStyle.PRIMARY),
-            InlineKeyboardButton(text="⚡️ پرداخت‌ها", callback_data="admin:payments", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="₮ پرداخت ارز دیجیتال", callback_data="admin:payment_providers", style=ButtonStyle.PRIMARY),
         ],
         [
             InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast", style=ButtonStyle.PRIMARY),
@@ -372,6 +372,59 @@ def admin_vpn_panel_delete_confirm_keyboard(panel_id: int) -> InlineKeyboardMark
             [
                 InlineKeyboardButton(text="✅ بله، حذف کن", callback_data=f"admin:vpn_panel:delyes:{panel_id}"),
                 InlineKeyboardButton(text="❌ انصراف", callback_data=f"admin:vpn_panel:view:{panel_id}"),
+            ]
+        ]
+    )
+
+
+# ---------- Payment Providers (ماژول اضافه: TRON PAYMENT) ----------
+
+
+def admin_payment_providers_keyboard(configs, unconfigured_types: list[str]) -> InlineKeyboardMarkup:
+    rows = []
+    for config in configs:
+        status_mark = "🟢" if config.status == "ACTIVE" else "⛔️"
+        health_mark = HEALTH_ICONS.get(config.last_health_status, "⚪️")
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{status_mark}{health_mark} {config.provider_type}",
+                    callback_data=f"admin:payment_provider:view:{config.id}",
+                )
+            ]
+        )
+    for provider_type in unconfigured_types:
+        rows.append(
+            [InlineKeyboardButton(text=f"➕ افزودن {provider_type}", callback_data=f"admin:payment_provider:add:{provider_type}")]
+        )
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_payment_provider_detail_keyboard(config) -> InlineKeyboardMarkup:
+    toggle_text = "⛔️ غیرفعال کن" if config.status == "ACTIVE" else "🟢 فعال کن"
+    auto_verify_text = f"🔁 Auto Verify: {'🟢 روشن' if config.auto_verify else '🔴 خاموش'}"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 تست اتصال", callback_data=f"admin:payment_provider:test:{config.id}")],
+            [InlineKeyboardButton(text=toggle_text, callback_data=f"admin:payment_provider:toggle:{config.id}")],
+            [InlineKeyboardButton(text=auto_verify_text, callback_data=f"admin:payment_provider:toggle_auto:{config.id}")],
+            [
+                InlineKeyboardButton(text="✏️ ویرایش API URL", callback_data=f"admin:payment_provider:edit_url:{config.id}"),
+                InlineKeyboardButton(text="✏️ ویرایش API Key", callback_data=f"admin:payment_provider:edit_key:{config.id}"),
+            ],
+            [InlineKeyboardButton(text="🗑 حذف", callback_data=f"admin:payment_provider:del:{config.id}")],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:payment_providers")],
+        ]
+    )
+
+
+def admin_payment_provider_delete_confirm_keyboard(config_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ بله، حذف کن", callback_data=f"admin:payment_provider:delyes:{config_id}"),
+                InlineKeyboardButton(text="❌ انصراف", callback_data=f"admin:payment_provider:view:{config_id}"),
             ]
         ]
     )

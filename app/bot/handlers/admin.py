@@ -37,10 +37,14 @@ from app.bot.keyboards.admin import (
     admin_vpn_panel_detail_keyboard,
     admin_vpn_panel_type_keyboard,
     admin_vpn_panels_keyboard,
+    admin_payment_providers_keyboard,
+    admin_payment_provider_detail_keyboard,
+    admin_payment_provider_delete_confirm_keyboard,
     button_columns_keyboard,
 )
 from app.core.crypto import mask_secret
 from app.services.vpn_panel_service import VPNPanelService
+from app.services.payment_provider_config_service import PaymentProviderConfigService
 from app.bot.keyboards.wallet import admin_deposit_decision_keyboard
 from app.bot.states.admin_states import AdminStates
 from app.config.settings import get_settings
@@ -108,26 +112,6 @@ async def handle_admin_menu(callback: CallbackQuery, state: FSMContext) -> None:
     async with get_session() as session:
         text = await _dashboard_text(session)
     await callback.message.edit_text(text, reply_markup=admin_dashboard_keyboard())
-    await callback.answer()
-
-
-@router.callback_query(F.data == "admin:payments")
-async def handle_admin_payments(callback: CallbackQuery) -> None:
-    if not _is_admin(callback.from_user.id):
-        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
-        return
-    s = get_settings()
-    configured = bool(s.tronado_api_key and s.tronado_ipn_signing_key and s.tronado_wallet_address)
-    callback_url = s.tronado_callback_url or ((s.webhook_base_url or "").rstrip("/") + "/payments/tronado/webhook")
-    text = (
-        "⚡️ <b>درگاه‌ها و پرداخت خودکار</b>\n\n"
-        f"Tronado: {'🟢 آماده اتصال' if configured else '🔴 ناقص'}\n"
-        f"Wallet مقصد TRX: {'✅ تنظیم شده' if s.tronado_wallet_address else '❌ تنظیم نشده'}\n"
-        f"IPN Signing Key: {'✅ تنظیم شده' if s.tronado_ipn_signing_key else '❌ تنظیم نشده'}\n"
-        f"Callback: <code>{callback_url or 'تنظیم نشده'}</code>\n\n"
-        "کلیدهای امنیتی در .env نگهداری می‌شوند و از داخل تلگرام نمایش داده نمی‌شوند."
-    )
-    await callback.message.edit_text(text, reply_markup=admin_back_keyboard())
     await callback.answer()
 
 
@@ -1886,4 +1870,283 @@ async def handle_admin_vpn_panel_delete(callback: CallbackQuery) -> None:
             return
         panels = await service.list_all()
     await callback.message.edit_text("🗑 پنل حذف شد.", reply_markup=admin_vpn_panels_keyboard(panels))
+    await callback.answer()
+
+
+# ---------- Payment Providers (ماژول اضافه: TRON PAYMENT + TRX WALLET) ----------
+
+
+def _payment_provider_detail_text(config) -> str:
+    health_label = {
+        "ONLINE": "🟢 آنلاین",
+        "DEGRADED": "🟡 کاهش‌کیفیت",
+        "OFFLINE": "🔴 آفلاین",
+        "UNKNOWN": "⚪️ هنوز تست نشده / پیاده‌سازی‌نشده",
+    }.get(config.last_health_status, "⚪️ نامشخص")
+    checked_at = config.last_health_checked_at.strftime("%Y-%m-%d %H:%M") if config.last_health_checked_at else "—"
+    return (
+        f"₮ <b>{config.provider_type}</b>\n"
+        f"API URL: <code>{config.api_url or '—'}</code>\n"
+        f"API Key: <code>{'ثبت‌شده (مخفی)' if config.api_key_encrypted else 'ثبت نشده'}</code>\n"
+        f"وضعیت: {'🟢 فعال' if config.status == 'ACTIVE' else '⛔️ غیرفعال'}\n"
+        f"Auto Verify: {'🟢 روشن' if config.auto_verify else '🔴 خاموش'}\n"
+        f"Webhook URL: <code>{config.webhook_url or '—'}</code>\n"
+        f"سلامت آخرین بررسی: {health_label}\n"
+        f"جزئیات: {config.last_health_detail or '—'}\n"
+        f"زمان بررسی: {checked_at}\n\n"
+        "⚠️ توجه: بخش‌های واقعی ارتباط با Tronado (قیمت TRX، ایجاد سفارش، Verify) "
+        "تا دریافت مستندات رسمی API پیاده‌سازی نشده‌اند - این بخش فقط تنظیمات را نگه می‌دارد."
+    )
+
+
+@router.callback_query(F.data == "admin:payment_providers")
+async def handle_admin_payment_providers(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    async with get_session() as session:
+        service = PaymentProviderConfigService(session)
+        configs = await service.list_all()
+        unconfigured = await service.list_unconfigured_types()
+    text = "₮ <b>Payment Providerهای ارز دیجیتال</b>"
+    if not configs:
+        text += "\n\nهنوز هیچ Provider ای تنظیم نشده است."
+    await callback.message.edit_text(text, reply_markup=admin_payment_providers_keyboard(configs, unconfigured))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:add:"))
+async def handle_admin_payment_provider_add_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    provider_type = callback.data.split(":")[-1]
+    await state.update_data(payment_provider_type=provider_type)
+    await state.set_state(AdminStates.WAITING_PAYMENT_PROVIDER_API_URL)
+    await callback.message.edit_text(
+        f"1️⃣ آدرس API «{provider_type}» را بفرست (با https://).\n"
+        "این آدرس رسمی مستندات/پنل توسعه‌دهنده‌ی Provider است.",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_PAYMENT_PROVIDER_API_URL, F.text)
+async def handle_payment_provider_api_url(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    url = message.text.strip()
+    if not url.startswith("http://") and not url.startswith("https://"):
+        await message.answer("❌ آدرس باید با http:// یا https:// شروع شود.")
+        return
+    await state.update_data(payment_provider_api_url=url)
+    await state.set_state(AdminStates.WAITING_PAYMENT_PROVIDER_API_KEY)
+    await message.answer(
+        "2️⃣ API Key را بفرست.\n"
+        "⚠️ این مقدار رمزنگاری‌شده ذخیره می‌شود و در پنل ادمین خام نمایش داده نمی‌شود.\n"
+        "بعد از ارسال، پیشنهاد می‌شود پیام حاوی API Key را از چت حذف کنید."
+    )
+
+
+@router.message(AdminStates.WAITING_PAYMENT_PROVIDER_API_KEY, F.text)
+async def handle_payment_provider_api_key(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    api_key = message.text.strip()
+    if not api_key:
+        await message.answer("❌ API Key نمی‌تواند خالی باشد.")
+        return
+
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+
+    data = await state.get_data()
+    await state.clear()
+
+    async with get_session() as session:
+        config = await PaymentProviderConfigService(session).create(
+            provider_type=data["payment_provider_type"],
+            api_url=data["payment_provider_api_url"],
+            api_key=api_key,
+        )
+
+    await message.answer(
+        f"✅ تنظیمات «{config.provider_type}» ثبت شد (فعلاً غیرفعال).\n"
+        "قبل از فعال‌سازی، «🔄 تست اتصال» را بزن و بعد از اطمینان، فعالش کن.",
+        reply_markup=admin_payment_provider_detail_keyboard(config),
+    )
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:view:"))
+async def handle_admin_payment_provider_view(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        config = await PaymentProviderConfigService(session).get(config_id)
+    if config is None:
+        await callback.answer("تنظیمات پیدا نشد.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        _payment_provider_detail_text(config), reply_markup=admin_payment_provider_detail_keyboard(config)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:test:"))
+async def handle_admin_payment_provider_test(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    await callback.answer("⏳ در حال تست اتصال...")
+    async with get_session() as session:
+        service = PaymentProviderConfigService(session)
+        try:
+            ok, detail = await service.test_connection(config_id)
+        except ValueError:
+            await callback.answer("تنظیمات پیدا نشد.", show_alert=True)
+            return
+        config = await service.get(config_id)
+
+    icon = "✅" if ok else "❌"
+    await callback.message.edit_text(
+        _payment_provider_detail_text(config) + f"\n\n{icon} نتیجه‌ی تست: {detail}",
+        reply_markup=admin_payment_provider_detail_keyboard(config),
+    )
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:toggle:"))
+async def handle_admin_payment_provider_toggle(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        config = await PaymentProviderConfigService(session).toggle_status(config_id)
+    await callback.message.edit_text(
+        _payment_provider_detail_text(config), reply_markup=admin_payment_provider_detail_keyboard(config)
+    )
+    await callback.answer("ثبت شد ✅")
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:toggle_auto:"))
+async def handle_admin_payment_provider_toggle_auto(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        config = await PaymentProviderConfigService(session).toggle_auto_verify(config_id)
+    await callback.message.edit_text(
+        _payment_provider_detail_text(config), reply_markup=admin_payment_provider_detail_keyboard(config)
+    )
+    await callback.answer("ثبت شد ✅")
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:edit_url:"))
+async def handle_admin_payment_provider_edit_url_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    await state.update_data(payment_provider_edit_id=config_id)
+    await state.set_state(AdminStates.WAITING_PAYMENT_PROVIDER_EDIT_API_URL)
+    await callback.message.edit_text("آدرس API جدید را بفرست (با https://).", reply_markup=admin_back_keyboard())
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_PAYMENT_PROVIDER_EDIT_API_URL, F.text)
+async def handle_admin_payment_provider_edit_url(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    url = message.text.strip()
+    if not url.startswith("http://") and not url.startswith("https://"):
+        await message.answer("❌ آدرس باید با http:// یا https:// شروع شود.")
+        return
+    data = await state.get_data()
+    await state.clear()
+    async with get_session() as session:
+        config = await PaymentProviderConfigService(session).update_credentials(
+            data["payment_provider_edit_id"], api_url=url
+        )
+    await message.answer(
+        _payment_provider_detail_text(config), reply_markup=admin_payment_provider_detail_keyboard(config)
+    )
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:edit_key:"))
+async def handle_admin_payment_provider_edit_key_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    await state.update_data(payment_provider_edit_id=config_id)
+    await state.set_state(AdminStates.WAITING_PAYMENT_PROVIDER_EDIT_API_KEY)
+    await callback.message.edit_text(
+        "API Key جدید را بفرست.\n⚠️ بعد از ارسال، پیام را از چت حذف کن.",
+        reply_markup=admin_back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminStates.WAITING_PAYMENT_PROVIDER_EDIT_API_KEY, F.text)
+async def handle_admin_payment_provider_edit_key(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    api_key = message.text.strip()
+    if not api_key:
+        await message.answer("❌ API Key نمی‌تواند خالی باشد.")
+        return
+
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+
+    data = await state.get_data()
+    await state.clear()
+    async with get_session() as session:
+        config = await PaymentProviderConfigService(session).update_credentials(
+            data["payment_provider_edit_id"], api_key=api_key
+        )
+    await message.answer(
+        _payment_provider_detail_text(config), reply_markup=admin_payment_provider_detail_keyboard(config)
+    )
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:del:"))
+async def handle_admin_payment_provider_delete_confirm(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    await callback.message.edit_text(
+        "⚠️ آیا از حذف این تنظیمات مطمئنی؟",
+        reply_markup=admin_payment_provider_delete_confirm_keyboard(config_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:payment_provider:delyes:"))
+async def handle_admin_payment_provider_delete(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔️ دسترسی ندارید.", show_alert=True)
+        return
+    config_id = int(callback.data.split(":")[-1])
+    async with get_session() as session:
+        service = PaymentProviderConfigService(session)
+        try:
+            await service.delete(config_id)
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+        configs = await service.list_all()
+        unconfigured = await service.list_unconfigured_types()
+    await callback.message.edit_text(
+        "🗑 تنظیمات حذف شد.", reply_markup=admin_payment_providers_keyboard(configs, unconfigured)
+    )
     await callback.answer()
