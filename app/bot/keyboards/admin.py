@@ -27,39 +27,116 @@ EDITABLE_SETTINGS = {
     "support_contact": "🎧 آیدی/لینک پشتیبانی",
 }
 
+# دسته‌بندی صفحه‌ی تنظیمات (که قبلاً یک صفحه‌ی تک با ۲۵+ دکمه بود، شلوغ و
+# پیداکردن هرچیزی سخت بود). هر دسته یک زیرصفحه‌ی مستقل می‌شود؛ تغییر مقدار
+# (handle_admin_setting_value) و منطق Validation کاملاً دست‌نخورده می‌ماند -
+# فقط چیدمان/گروه‌بندی نمایش عوض شده.
+SETTINGS_CATEGORIES: dict[str, dict] = {
+    "general": {
+        "label": "📝 عمومی",
+        "keys": ["welcome_text", "payment_info", "support_contact"],
+        "toggles": ["toggle_report"],
+    },
+    "shop": {
+        "label": "🛍 فروشگاه و قیمت‌گذاری",
+        "keys": [
+            "token_purchase_price",
+            "token_transfer_fee_percent",
+            "shop_category_button_columns",
+            "shop_product_button_columns",
+        ],
+        "toggles": [],
+    },
+    "rewards": {
+        "label": "🎮 گیمیفیکیشن و پاداش",
+        "keys": [
+            "join_bonus_amount",
+            "referral_cashback_percent",
+            "referral_invite_bonus_amount",
+            "daily_checkin_amount",
+            "weekly_leaderboard_reward_top1",
+            "weekly_leaderboard_reward_top2",
+            "weekly_leaderboard_reward_top3",
+        ],
+        "toggles": [
+            "toggle_join_bonus",
+            "toggle_referral_cashback",
+            "toggle_referral_invite_bonus",
+            "toggle_daily_checkin",
+            "toggle_weekly_leaderboard",
+        ],
+    },
+    "appearance": {
+        "label": "🎨 ظاهر (آیکون / استیکر)",
+        "keys": [
+            "sticker_welcome",
+            "sticker_checkin",
+            "sticker_purchase_success",
+            "icon_shop",
+            "icon_wallet",
+            "icon_checkin",
+            "icon_leaderboard",
+        ],
+        "toggles": [],
+    },
+}
+
+# نگاشت معکوس - برای این‌که وقتی روی یک مقدار خاص Edit/Toggle می‌زنیم،
+# بعد از ذخیره بدونیم به کدوم زیرصفحه برگردیم (نه صفحه‌ی کلی تنظیمات).
+SETTING_KEY_TO_CATEGORY: dict[str, str] = {
+    key: cat for cat, info in SETTINGS_CATEGORIES.items() for key in info["keys"]
+}
+TOGGLE_TO_CATEGORY: dict[str, str] = {
+    toggle: cat for cat, info in SETTINGS_CATEGORIES.items() for toggle in info["toggles"]
+}
+
+_TOGGLE_META = {
+    "toggle_report": "📢 گزارش سفارش",
+    "toggle_join_bonus": "🎁 پاداش عضویت",
+    "toggle_referral_cashback": "👥 کش‌بک رفرال",
+    "toggle_referral_invite_bonus": "🤝 پاداش دعوت",
+    "toggle_daily_checkin": "📅 چک-این روزانه",
+    "toggle_weekly_leaderboard": "🏆 لیدربرد هفتگی",
+}
+
 
 
 def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
     """
-    پنل ادمین گروه‌بندی‌شده، دوستونه، و با رنگ‌های واقعی تلگرام (Bot API 9.4):
-    قرمز = نیازمند رسیدگی فوری، سبز = مدیریت کاتالوگ، آبی = بقیه‌ی موارد.
+    پنل ادمین گروه‌بندی‌شده به‌صورت موضوعی (نه فقط برای پرکردن ردیف):
+    فروشگاه -> مالی -> اتصالات خارجی (Provider Engine) -> کاربر/تعامل ->
+    ارتباطات -> تنظیمات. رنگ‌ها هم‌چنان معنادارند: قرمز = نیازمند رسیدگی
+    فوری، سبز = مدیریت کاتالوگ، آبی = بقیه‌ی موارد.
     """
     rows = [
         [InlineKeyboardButton(text="📊 آمار فروش", callback_data="admin:stats", style=ButtonStyle.PRIMARY)],
+        # فروشگاه: محصول/دسته/تخفیف کنار هم
         [
             InlineKeyboardButton(text="🛍 محصولات", callback_data="admin:products", style=ButtonStyle.SUCCESS),
             InlineKeyboardButton(text="📂 دسته‌بندی‌ها", callback_data="admin:categories", style=ButtonStyle.SUCCESS),
         ],
+        [InlineKeyboardButton(text="🎟 کدهای تخفیف", callback_data="admin:coupons", style=ButtonStyle.SUCCESS)],
+        # مالی: سفارش/شارژ کنار هم (هر دو نیازمند رسیدگی فوری هستند)
         [
             InlineKeyboardButton(text="📦 سفارش‌های در انتظار", callback_data="admin:orders", style=ButtonStyle.DANGER),
             InlineKeyboardButton(text="💳 درخواست‌های شارژ", callback_data="admin:deposits", style=ButtonStyle.DANGER),
         ],
-        [
-            InlineKeyboardButton(text="🎟 کدهای تخفیف", callback_data="admin:coupons", style=ButtonStyle.PRIMARY),
-            InlineKeyboardButton(text="👤 مدیریت کاربران", callback_data="admin:users", style=ButtonStyle.PRIMARY),
-        ],
-        [
-            InlineKeyboardButton(text="📢 عضویت اجباری", callback_data="admin:channels", style=ButtonStyle.PRIMARY),
-            InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments", style=ButtonStyle.PRIMARY),
-        ],
+        # Provider Engine: هر دو یک نوع اتصال خارجی هستند (VPN Panel / Payment Provider)
         [
             InlineKeyboardButton(text="🔐 پنل‌های VPN", callback_data="admin:vpn_panels", style=ButtonStyle.PRIMARY),
             InlineKeyboardButton(text="₮ پرداخت ارز دیجیتال", callback_data="admin:payment_providers", style=ButtonStyle.PRIMARY),
         ],
+        # کاربر و تعامل
         [
-            InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast", style=ButtonStyle.PRIMARY),
-            InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="👤 مدیریت کاربران", callback_data="admin:users", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="🏆 تورنومنت‌ها", callback_data="admin:tournaments", style=ButtonStyle.PRIMARY),
         ],
+        # ارتباطات
+        [
+            InlineKeyboardButton(text="📢 عضویت اجباری", callback_data="admin:channels", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="📣 پیام همگانی", callback_data="admin:broadcast", style=ButtonStyle.PRIMARY),
+        ],
+        [InlineKeyboardButton(text="⚙️ تنظیمات", callback_data="admin:settings", style=ButtonStyle.PRIMARY)],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -257,47 +334,49 @@ def admin_discount_duration_keyboard(product_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_settings_keyboard(
-    report_enabled: bool = True,
-    join_bonus_enabled: bool = False,
-    referral_cashback_enabled: bool = True,
-    referral_invite_bonus_enabled: bool = False,
-    daily_checkin_enabled: bool = False,
-    weekly_leaderboard_reward_enabled: bool = False,
-) -> InlineKeyboardMarkup:
-    # مقادیر قابل‌ویرایش (متن/عدد)، دوستونه، آبی (چون همیشه یک اکشن خنثی هستند)
-    buttons = [
-        InlineKeyboardButton(text=label, callback_data=f"admin:setting:edit:{key}", style=ButtonStyle.PRIMARY)
-        for key, label in EDITABLE_SETTINGS.items()
+def admin_settings_categories_keyboard() -> InlineKeyboardMarkup:
+    """صفحه‌ی ورودی تنظیمات - فقط انتخاب دسته، نه ۲۵ دکمه با هم."""
+    rows = [
+        [InlineKeyboardButton(text=info["label"], callback_data=f"admin:settings:cat:{cat}", style=ButtonStyle.PRIMARY)]
+        for cat, info in SETTINGS_CATEGORIES.items()
     ]
-    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
-    # کلیدهای فعال/غیرفعال‌سازی، دوستونه؛ رنگ دکمه (سبز/قرمز) خودش نشانگر
-    # وضعیت روشن/خاموش است، ایموجی هم برای وضوح بیشتر نگه داشته شده.
+
+def admin_settings_category_keyboard(category: str, toggle_states: dict[str, bool]) -> InlineKeyboardMarkup:
+    """
+    زیرصفحه‌ی یک دسته‌ی تنظیمات: فقط مقادیر/سوییچ‌های همون دسته.
+    toggle_states: مثل {"toggle_report": True, ...} - فقط کلیدهای این دسته لازمه پر باشن.
+    """
+    info = SETTINGS_CATEGORIES[category]
+    buttons = [
+        InlineKeyboardButton(text=EDITABLE_SETTINGS[key], callback_data=f"admin:setting:edit:{key}", style=ButtonStyle.PRIMARY)
+        for key in info["keys"]
+    ]
+    rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+
     def _toggle_style(enabled: bool) -> ButtonStyle:
         return ButtonStyle.SUCCESS if enabled else ButtonStyle.DANGER
 
-    report_mark = "🟢" if report_enabled else "🔴"
-    join_mark = "🟢" if join_bonus_enabled else "🔴"
-    cashback_mark = "🟢" if referral_cashback_enabled else "🔴"
-    invite_mark = "🟢" if referral_invite_bonus_enabled else "🔴"
-    checkin_mark = "🟢" if daily_checkin_enabled else "🔴"
-    leaderboard_mark = "🟢" if weekly_leaderboard_reward_enabled else "🔴"
+    toggle_row = []
+    for toggle_key in info["toggles"]:
+        enabled = toggle_states.get(toggle_key, False)
+        mark = "🟢" if enabled else "🔴"
+        toggle_row.append(
+            InlineKeyboardButton(
+                text=f"{_TOGGLE_META[toggle_key]} {mark}",
+                callback_data=f"admin:setting:{toggle_key}",
+                style=_toggle_style(enabled),
+            )
+        )
+        if len(toggle_row) == 2:
+            rows.append(toggle_row)
+            toggle_row = []
+    if toggle_row:
+        rows.append(toggle_row)
 
-    rows.append([
-        InlineKeyboardButton(text=f"📢 گزارش سفارش {report_mark}", callback_data="admin:setting:toggle_report", style=_toggle_style(report_enabled)),
-        InlineKeyboardButton(text=f"🎁 پاداش عضویت {join_mark}", callback_data="admin:setting:toggle_join_bonus", style=_toggle_style(join_bonus_enabled)),
-    ])
-    rows.append([
-        InlineKeyboardButton(text=f"👥 کش‌بک رفرال {cashback_mark}", callback_data="admin:setting:toggle_referral_cashback", style=_toggle_style(referral_cashback_enabled)),
-        InlineKeyboardButton(text=f"🤝 پاداش دعوت {invite_mark}", callback_data="admin:setting:toggle_referral_invite_bonus", style=_toggle_style(referral_invite_bonus_enabled)),
-    ])
-    rows.append([
-        InlineKeyboardButton(text=f"📅 چک-این روزانه {checkin_mark}", callback_data="admin:setting:toggle_daily_checkin", style=_toggle_style(daily_checkin_enabled)),
-        InlineKeyboardButton(text=f"🏆 لیدربرد هفتگی {leaderboard_mark}", callback_data="admin:setting:toggle_weekly_leaderboard", style=_toggle_style(weekly_leaderboard_reward_enabled)),
-    ])
-
-    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:menu")])
+    rows.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin:settings")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

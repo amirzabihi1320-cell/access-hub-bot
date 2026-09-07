@@ -18,6 +18,9 @@ from sqlalchemy import select
 from app.models.product import Product
 from app.bot.keyboards.admin import (
     EDITABLE_SETTINGS,
+    SETTINGS_CATEGORIES,
+    SETTING_KEY_TO_CATEGORY,
+    TOGGLE_TO_CATEGORY,
     admin_back_keyboard,
     admin_categories_keyboard,
     admin_category_delete_confirm_keyboard,
@@ -32,7 +35,8 @@ from app.bot.keyboards.admin import (
     admin_product_type_pick_keyboard,
     admin_product_vpn_keyboard,
     admin_products_keyboard,
-    admin_settings_keyboard,
+    admin_settings_categories_keyboard,
+    admin_settings_category_keyboard,
     admin_vpn_panel_delete_confirm_keyboard,
     admin_vpn_panel_detail_keyboard,
     admin_vpn_panel_type_keyboard,
@@ -1084,78 +1088,98 @@ async def handle_admin_channel_toggle(callback: CallbackQuery) -> None:
 # ---------- تنظیمات ----------
 
 
-async def _settings_keyboard_state(session) -> InlineKeyboardMarkup:
+async def _settings_toggle_states(session) -> dict[str, bool]:
     settings_service = SettingsService(session)
-    return admin_settings_keyboard(
-        report_enabled=await settings_service.is_order_report_enabled(),
-        join_bonus_enabled=await settings_service.is_join_bonus_enabled(),
-        referral_cashback_enabled=await settings_service.is_referral_cashback_enabled(),
-        referral_invite_bonus_enabled=await settings_service.is_referral_invite_bonus_enabled(),
-        daily_checkin_enabled=await settings_service.is_daily_checkin_enabled(),
-        weekly_leaderboard_reward_enabled=await settings_service.is_weekly_leaderboard_reward_enabled(),
-    )
+    return {
+        "toggle_report": await settings_service.is_order_report_enabled(),
+        "toggle_join_bonus": await settings_service.is_join_bonus_enabled(),
+        "toggle_referral_cashback": await settings_service.is_referral_cashback_enabled(),
+        "toggle_referral_invite_bonus": await settings_service.is_referral_invite_bonus_enabled(),
+        "toggle_daily_checkin": await settings_service.is_daily_checkin_enabled(),
+        "toggle_weekly_leaderboard": await settings_service.is_weekly_leaderboard_reward_enabled(),
+    }
+
+
+async def _settings_category_view(session, category: str) -> InlineKeyboardMarkup:
+    states = await _settings_toggle_states(session)
+    return admin_settings_category_keyboard(category, states)
 
 
 @router.callback_query(F.data == "admin:settings")
 async def handle_admin_settings(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
+    await callback.message.edit_text("⚙️ <b>تنظیمات</b>\n\nیک دسته را انتخاب کن:", reply_markup=admin_settings_categories_keyboard())
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:settings:cat:"))
+async def handle_admin_settings_category(callback: CallbackQuery) -> None:
+    category = callback.data.split(":")[-1]
+    if category not in SETTINGS_CATEGORIES:
+        await callback.answer("دسته پیدا نشد.", show_alert=True)
+        return
+    label = SETTINGS_CATEGORIES[category]["label"]
+    async with get_session() as session:
+        keyboard = await _settings_category_view(session, category)
+    await callback.message.edit_text(f"⚙️ <b>تنظیمات — {label}</b>", reply_markup=keyboard)
+    await callback.answer()
+
+
+async def _handle_settings_toggle(callback: CallbackQuery, toggle_key: str, service_call, on_label: str, off_label: str) -> None:
+    category = TOGGLE_TO_CATEGORY[toggle_key]
+    async with get_session() as session:
+        new_value = await service_call(SettingsService(session))
+        keyboard = await _settings_category_view(session, category)
+    label = SETTINGS_CATEGORIES[category]["label"]
+    await callback.message.edit_text(f"⚙️ <b>تنظیمات — {label}</b>", reply_markup=keyboard)
+    await callback.answer(on_label if new_value else off_label)
 
 
 @router.callback_query(F.data == "admin:setting:toggle_report")
 async def handle_admin_toggle_report(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        await SettingsService(session).toggle_order_report()
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
-    await callback.answer("✅ ذخیره شد")
+    await _handle_settings_toggle(
+        callback, "toggle_report", SettingsService.toggle_order_report,
+        "✅ ذخیره شد", "✅ ذخیره شد",
+    )
 
 
 @router.callback_query(F.data == "admin:setting:toggle_join_bonus")
 async def handle_admin_toggle_join_bonus(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        new_value = await SettingsService(session).toggle_join_bonus()
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
-    await callback.answer("🎁 پاداش عضویت فعال شد" if new_value else "🎁 پاداش عضویت غیرفعال شد")
+    await _handle_settings_toggle(
+        callback, "toggle_join_bonus", SettingsService.toggle_join_bonus,
+        "🎁 پاداش عضویت فعال شد", "🎁 پاداش عضویت غیرفعال شد",
+    )
 
 
 @router.callback_query(F.data == "admin:setting:toggle_referral_cashback")
 async def handle_admin_toggle_referral_cashback(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        new_value = await SettingsService(session).toggle_referral_cashback()
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
-    await callback.answer("👥 کش‌بک رفرال فعال شد" if new_value else "👥 کش‌بک رفرال غیرفعال شد")
+    await _handle_settings_toggle(
+        callback, "toggle_referral_cashback", SettingsService.toggle_referral_cashback,
+        "👥 کش‌بک رفرال فعال شد", "👥 کش‌بک رفرال غیرفعال شد",
+    )
 
 
 @router.callback_query(F.data == "admin:setting:toggle_referral_invite_bonus")
 async def handle_admin_toggle_referral_invite_bonus(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        new_value = await SettingsService(session).toggle_referral_invite_bonus()
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
-    await callback.answer("🤝 پاداش دعوت دوست فعال شد" if new_value else "🤝 پاداش دعوت دوست غیرفعال شد")
+    await _handle_settings_toggle(
+        callback, "toggle_referral_invite_bonus", SettingsService.toggle_referral_invite_bonus,
+        "🤝 پاداش دعوت دوست فعال شد", "🤝 پاداش دعوت دوست غیرفعال شد",
+    )
 
 
 @router.callback_query(F.data == "admin:setting:toggle_daily_checkin")
 async def handle_admin_toggle_daily_checkin(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        new_value = await SettingsService(session).toggle_daily_checkin()
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
-    await callback.answer("📅 چک-این روزانه فعال شد" if new_value else "📅 چک-این روزانه غیرفعال شد")
+    await _handle_settings_toggle(
+        callback, "toggle_daily_checkin", SettingsService.toggle_daily_checkin,
+        "📅 چک-این روزانه فعال شد", "📅 چک-این روزانه غیرفعال شد",
+    )
 
 
 @router.callback_query(F.data == "admin:setting:toggle_weekly_leaderboard")
 async def handle_admin_toggle_weekly_leaderboard(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        new_value = await SettingsService(session).toggle_weekly_leaderboard_reward()
-        keyboard = await _settings_keyboard_state(session)
-    await callback.message.edit_text("⚙️ <b>تنظیمات</b>", reply_markup=keyboard)
-    await callback.answer("🏆 پاداش هفتگی لیدربرد فعال شد" if new_value else "🏆 پاداش هفتگی لیدربرد غیرفعال شد")
+    await _handle_settings_toggle(
+        callback, "toggle_weekly_leaderboard", SettingsService.toggle_weekly_leaderboard_reward,
+        "🏆 پاداش هفتگی لیدربرد فعال شد", "🏆 پاداش هفتگی لیدربرد غیرفعال شد",
+    )
 
 
 @router.callback_query(F.data.startswith("admin:setting:edit:"))
@@ -1178,9 +1202,14 @@ async def handle_admin_setting_edit_start(callback: CallbackQuery, state: FSMCon
             current = "\n\n".join(parts)
     await state.set_state(AdminStates.WAITING_SETTING_VALUE)
     await state.update_data(setting_key=key)
+    category = SETTING_KEY_TO_CATEGORY.get(key)
+    back_callback = f"admin:settings:cat:{category}" if category else "admin:settings"
+    back_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔙 بازگشت", callback_data=back_callback)]]
+    )
     await callback.message.edit_text(
         f"⚙️ <b>{label}</b>\n\nمقدار فعلی:\n<code>{current or '—'}</code>\n\nمقدار جدید را بفرستید:",
-        reply_markup=admin_back_keyboard(),
+        reply_markup=back_keyboard,
     )
     await callback.answer()
 
